@@ -1,4 +1,11 @@
-import { ApiError, GoogleGenAI, createPartFromFunctionResponse, type Content } from "@google/genai";
+import {
+  ApiError,
+  FunctionCallingConfigMode,
+  GoogleGenAI,
+  createPartFromFunctionResponse,
+  type Content,
+  type Part,
+} from "@google/genai";
 import type { QaTool } from "./tools.js";
 
 export interface AgentUsage {
@@ -12,6 +19,10 @@ export interface AgentRunResult {
   usage: AgentUsage;
   /** true si se agotaron las iteraciones sin que el modelo dejara de llamar herramientas. */
   hitIterationCap: boolean;
+  /** Texto final del modelo cuando dejó de llamar herramientas, si lo hubo. */
+  finalText: string;
+  /** true si hizo falta forzar la llamada de cierre. */
+  neededClosingNudge: boolean;
 }
 
 export interface AgentRunOptions {
@@ -25,6 +36,11 @@ export interface AgentRunOptions {
   /** Se consulta después de cada ronda: si devuelve true, la corrida termina. */
   shouldStop: () => boolean;
   onIteration: (iteration: number) => void;
+  /**
+   * Herramienta con la que el agente debe cerrar la corrida. Si el modelo deja
+   * de llamar herramientas sin haberla usado, se le fuerza esa llamada.
+   */
+  closingToolName: string;
 }
 
 /** Error de infraestructura: la corrida no pudo completarse. */
@@ -138,6 +154,34 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
   const usage: AgentUsage = { promptTokens: 0, responseTokens: 0, totalTokens: 0 };
   let iterations = 0;
   let stoppedNaturally = false;
+  let finalText = "";
+  let neededClosingNudge = false;
+
+  const accumulate = (metadata: {
+    promptTokenCount?: number;
+    candidatesTokenCount?: number;
+    totalTokenCount?: number;
+  } | undefined): void => {
+    usage.promptTokens += metadata?.promptTokenCount ?? 0;
+    usage.responseTokens += metadata?.candidatesTokenCount ?? 0;
+    usage.totalTokens += metadata?.totalTokenCount ?? 0;
+  };
+
+  /** Ejecuta las herramientas pedidas y devuelve las partes de respuesta. */
+  const executeCalls = async (
+    calls: { name?: string; id?: string; args?: Record<string, unknown> }[],
+  ): Promise<Part[]> => {
+    const resultParts: Part[] = [];
+    for (const call of calls) {
+      const name = call.name ?? "";
+      const tool = options.tools.find((t) => t.name === name);
+      const output = tool
+        ? await tool.run(call.args ?? {})
+        : JSON.stringify({ error: `No existe una herramienta llamada ${name}.` });
+      resultParts.push(createPartFromFunctionResponse(call.id ?? name, name, { output }));
+    }
+    return resultParts;
+  };
 
   while (iterations < options.maxIterations) {
     const response = await callWithRetry(
@@ -157,34 +201,27 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
     );
 
     iterations += 1;
-    usage.promptTokens += response.usageMetadata?.promptTokenCount ?? 0;
-    usage.responseTokens += response.usageMetadata?.candidatesTokenCount ?? 0;
-    usage.totalTokens += response.usageMetadata?.totalTokenCount ?? 0;
-    options.onIteration(iterations);
+    accumulate(response.usageMetadata);
 
     const calls = response.functionCalls ?? [];
+    const modelParts = response.candidates?.[0]?.content?.parts;
+    if (modelParts && modelParts.length > 0) {
+      contents.push({ role: "model", parts: modelParts });
+    } else if (calls.length > 0) {
+      contents.push({ role: "model", parts: calls.map((call) => ({ functionCall: call })) });
+    }
+
     if (calls.length === 0) {
-      // El modelo dejó de pedir herramientas: terminó por su cuenta.
+      // El modelo dejó de pedir herramientas: se dio por terminado.
+      finalText = response.text ?? "";
       stoppedNaturally = true;
       break;
     }
 
-    const modelParts = response.candidates?.[0]?.content?.parts;
-    contents.push({
-      role: "model",
-      parts: modelParts ?? calls.map((call) => ({ functionCall: call })),
-    });
-
-    const resultParts = [];
-    for (const call of calls) {
-      const name = call.name ?? "";
-      const tool = options.tools.find((t) => t.name === name);
-      const output = tool
-        ? await tool.run(call.args ?? {})
-        : JSON.stringify({ error: `No existe una herramienta llamada ${name}.` });
-      resultParts.push(createPartFromFunctionResponse(call.id ?? name, name, { output }));
-    }
-    contents.push({ role: "user", parts: resultParts });
+    contents.push({ role: "user", parts: await executeCalls(calls) });
+    // Se loguea después de ejecutar, para que los contadores reflejen
+    // lo que ya pasó y no el estado previo a esta iteración.
+    options.onIteration(iterations);
 
     if (options.shouldStop()) {
       stoppedNaturally = true;
@@ -192,5 +229,63 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
     }
   }
 
-  return { iterations, usage, hitIterationCap: !stoppedNaturally };
+  /**
+   * Cierre forzado.
+   *
+   * Un modelo puede darse por terminado escribiendo su conclusión en prosa en
+   * lugar de llamar a la herramienta de cierre. Sin esto, esa corrida se
+   * contaría como incompleta y bloquearía un deploy que estaba bien.
+   *
+   * No se acepta el texto libre como veredicto: se le exige la llamada, con
+   * mode ANY restringido a esa única función. El veredicto tiene que entrar
+   * al gate por el mismo camino estructurado que en una corrida normal.
+   */
+  if (!options.shouldStop() && iterations < options.maxIterations) {
+    neededClosingNudge = true;
+    contents.push({
+      role: "user",
+      parts: [
+        {
+          text:
+            "No cerraste la corrida. Repasá lo que probaste y llamá ahora a " +
+            `${options.closingToolName} con tu veredicto: "pass" si la aplicación respetó ` +
+            'el contrato, "fail" si encontraste algo que deba frenar el deploy.',
+        },
+      ],
+    });
+
+    const response = await callWithRetry(
+      () =>
+        ai.models.generateContent({
+          model: options.model,
+          contents,
+          config: {
+            systemInstruction: options.systemInstruction,
+            tools: [{ functionDeclarations }],
+            automaticFunctionCalling: { disable: true },
+            maxOutputTokens: options.maxOutputTokens,
+            toolConfig: {
+              functionCallingConfig: {
+                mode: FunctionCallingConfigMode.ANY,
+                allowedFunctionNames: [options.closingToolName],
+              },
+            },
+          },
+        }),
+      "cierre forzado",
+    );
+
+    iterations += 1;
+    accumulate(response.usageMetadata);
+    await executeCalls(response.functionCalls ?? []);
+    options.onIteration(iterations);
+  }
+
+  return {
+    iterations,
+    usage,
+    hitIterationCap: !stoppedNaturally,
+    finalText,
+    neededClosingNudge,
+  };
 }

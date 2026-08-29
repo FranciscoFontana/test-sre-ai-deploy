@@ -118,6 +118,7 @@ async function main(): Promise<void> {
       tools,
       maxIterations: config.maxIterations,
       maxOutputTokens: config.maxOutputTokens,
+      closingToolName: "finish_run",
       shouldStop: () => session.outcome !== null,
       onIteration: (iteration) => {
         console.log(
@@ -139,6 +140,15 @@ async function main(): Promise<void> {
       fail(error.message);
     }
     fail(error instanceof Error ? error.message : String(error));
+  }
+
+  if (result.neededClosingNudge) {
+    console.log(
+      "[qa-agent] el modelo se dio por terminado sin llamar a finish_run; se le forzó el cierre",
+    );
+    if (result.finalText.trim().length > 0) {
+      console.log(`[qa-agent] texto con el que había cerrado: ${result.finalText.trim()}`);
+    }
   }
 
   const hitIterationCap = result.hitIterationCap && session.outcome === null;

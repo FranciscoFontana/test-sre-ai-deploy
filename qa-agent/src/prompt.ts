@@ -57,8 +57,12 @@ independientes: aprovecharlo reduce la cantidad de iteraciones que consumís.
 
 Cuando hayas cubierto los seis puntos de arriba, llamá a finish_run exactamente una vez.
 Usá verdict "fail" si encontraste algo que debería frenar el deploy, y "pass" si la
-aplicación respeta el contrato. Cerrar la corrida es obligatorio: si terminás sin
-llamar a finish_run, la corrida se considera fallida por incompleta.
+aplicación respeta el contrato.
+
+La llamada a finish_run es la ÚNICA forma válida de cerrar. Escribir tu conclusión
+como texto no cierra nada: esa corrida se toma como incompleta y bloquea el deploy
+aunque la aplicación esté perfecta. Tu último acto debe ser la llamada a la
+herramienta, no un resumen en prosa.
 
 Tenés un presupuesto acotado de iteraciones y de requests. Priorizá cobertura amplia
 del contrato por encima de explorar un mismo endpoint en profundidad.`;
