@@ -86,7 +86,7 @@ Tres cosas amortiguan esos límites:
 - **Reintentos con backoff** ante un 429. En capa gratuita chocar contra el límite
   por minuto es esperable, y no debe abortar el gate: el agente espera y reintenta.
   Sólo se rinde tras varios intentos, e informa que probablemente sea cuota diaria.
-- **Tope de 20 iteraciones** y de 80 requests HTTP por corrida.
+- **Tope de 12 iteraciones** y de 80 requests HTTP por corrida.
 - **`maxOutputTokens` de 4096** por turno.
 
 En esta capa **no hay prompt caching**, así que las reglas de QA y el contrato se
@@ -134,7 +134,7 @@ cd qa-agent && npm ci && QA_BASE_URL=http://localhost:3000 npm run qa
 | `GEMINI_API_KEY` | — | Credencial de Google AI Studio. Obligatoria. |
 | `QA_MODEL` | `gemini-3.6-flash` | Modelo a usar. |
 | `QA_FAIL_ON` | `high` | Gravedad mínima que bloquea el deploy. |
-| `QA_MAX_ITERATIONS` | `20` | Tope de iteraciones del loop agéntico. |
+| `QA_MAX_ITERATIONS` | `12` | Tope de iteraciones del loop agéntico. |
 | `QA_MAX_REQUESTS` | `80` | Tope de requests HTTP por corrida. |
 | `QA_MAX_OUTPUT_TOKENS` | `4096` | Tope de tokens de salida por turno. |
 | `QA_OUT_DIR` | cwd | Dónde escribir `qa-report.md` y `.json`. |

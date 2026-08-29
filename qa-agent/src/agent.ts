@@ -266,7 +266,12 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
    * mode ANY restringido a esa única función. El veredicto tiene que entrar
    * al gate por el mismo camino estructurado que en una corrida normal.
    */
-  if (!options.shouldStop() && iterations < options.maxIterations) {
+  // Se intenta SIEMPRE que la corrida haya terminado sin veredicto, incluso si
+  // fue por agotar las iteraciones. Ese es justamente el caso en que más hace
+  // falta: el agente ya tiene los hallazgos registrados y sólo falta que emita
+  // el veredicto. Condicionarlo a que sobraran iteraciones —como estaba— dejaba
+  // sin cerrar precisamente las corridas que llegaban al tope.
+  if (!options.shouldStop()) {
     neededClosingNudge = true;
     contents.push({
       role: "user",

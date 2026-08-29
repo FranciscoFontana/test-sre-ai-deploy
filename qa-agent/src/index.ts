@@ -50,7 +50,10 @@ const config = {
   // modelo es el gate de un deploy, y no quiero que cambie solo bajo los pies.
   // Ver los modelos disponibles para tu key: el agente los lista ante un 404.
   model: process.env.QA_MODEL ?? "gemini-3.6-flash",
-  maxIterations: Number(process.env.QA_MAX_ITERATIONS ?? 20),
+  // Medido: el agente hace el trabajo útil en las primeras 5 iteraciones y
+  // después se queda girando, una request por turno, sin converger. Como cada
+  // iteración reenvía todo el historial, las de más cuestan cuota y no aportan.
+  maxIterations: Number(process.env.QA_MAX_ITERATIONS ?? 12),
   maxRequests: Number(process.env.QA_MAX_REQUESTS ?? 80),
   // Gemini 3.x razona antes de responder y ese pensamiento consume presupuesto
   // de salida. Con un tope bajo el modelo se queda sin margen justo antes de

@@ -80,7 +80,11 @@ aunque la aplicación esté perfecta. Tu último acto debe ser la llamada a la
 herramienta, no un resumen en prosa.
 
 Tenés un presupuesto acotado de iteraciones y de requests. Priorizá cobertura amplia
-del contrato por encima de explorar un mismo endpoint en profundidad.`;
+del contrato por encima de explorar un mismo endpoint en profundidad.
+
+Convergé. Apenas hayas pasado por los seis puntos, cerrá: no sirve seguir repitiendo
+pruebas sobre lo que ya verificaste, ni confirmar tres veces un bug que ya registraste.
+Agrupá varias requests independientes en un mismo turno en lugar de ir de a una.`;
 
 export function buildSystemInstruction(openapiYaml: string): string {
   return [
