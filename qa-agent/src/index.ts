@@ -33,12 +33,27 @@ const config = {
   failOn: parseSeverity(readArg("--fail-on") ?? process.env.QA_FAIL_ON, "high"),
   outDir: readArg("--out-dir") ?? process.env.QA_OUT_DIR ?? process.cwd(),
   contractPath: process.env.QA_CONTRACT_PATH ?? join(REPO_ROOT, "contracts", "openapi.yaml"),
+  // Las API keys vinculadas a una identidad exigen declarar el workspace
+  // en cada request. Con una key clásica esto queda vacío y no se envía.
+  workspaceId: process.env.ANTHROPIC_WORKSPACE_ID,
 };
 
+/** Señal interna de salida. No es un error del programa: ya se reportó. */
+class ExitSignal extends Error {}
+
+/**
+ * Aborta la corrida por un problema de infraestructura.
+ *
+ * Fija process.exitCode en lugar de llamar a process.exit(): en Windows,
+ * process.exit() con sockets todavía abiertos dispara una assertion de libuv
+ * que aborta el proceso con un código distinto del pedido. En el camino de
+ * éxito eso convertiría un QA aprobado en un fallo.
+ */
 function fail(message: string): never {
   console.error(`\n[qa-agent] ERROR: ${message}`);
   console.error("[qa-agent] El gate no pudo ejecutarse. Esto NO cuenta como QA aprobado.");
-  process.exit(EXIT_INFRA_ERROR);
+  process.exitCode = EXIT_INFRA_ERROR;
+  throw new ExitSignal(message);
 }
 
 /** Espera a que el entorno responda antes de gastar un solo token. */
@@ -79,7 +94,14 @@ async function main(): Promise<void> {
 
   const session = new QaSession(config.baseUrl, config.maxRequests);
   const tools = buildTools(session);
-  const client = new Anthropic();
+  const client = new Anthropic(
+    config.workspaceId
+      ? { defaultHeaders: { "anthropic-workspace-id": config.workspaceId } }
+      : {},
+  );
+  if (config.workspaceId) {
+    console.log(`[qa-agent] workspace: ${config.workspaceId}`);
+  }
 
   const startedAt = new Date();
   const startedMs = performance.now();
@@ -128,6 +150,13 @@ async function main(): Promise<void> {
       fail("La API de Claude respondió rate limit. Reintentá la corrida.");
     }
     if (error instanceof Anthropic.APIError) {
+      if (error.status === 400 && /workspace/i.test(error.message)) {
+        fail(
+          "Tu API key está vinculada a una identidad y requiere declarar el workspace. " +
+            "Definí ANTHROPIC_WORKSPACE_ID con el id del workspace (lo encontrás en " +
+            "console.anthropic.com -> Settings -> Workspaces).",
+        );
+      }
       fail(`La API de Claude falló (${error.status}): ${error.message}`);
     }
     fail(`Fallo inesperado durante la corrida: ${error instanceof Error ? error.message : String(error)}`);
@@ -175,9 +204,15 @@ async function main(): Promise<void> {
     for (const reason of gate.reasons) console.log(`  · ${reason}`);
   }
 
-  process.exit(gate.exitCode);
+  // Igual que en fail(): exitCode en lugar de process.exit().
+  process.exitCode = gate.exitCode;
 }
 
 main().catch((error) => {
-  fail(error instanceof Error ? error.message : String(error));
+  if (error instanceof ExitSignal) return; // ya reportado por fail()
+  try {
+    fail(error instanceof Error ? error.message : String(error));
+  } catch {
+    // fail() ya fijó el exitCode y escribió el mensaje.
+  }
 });

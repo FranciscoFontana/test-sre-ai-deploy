@@ -120,6 +120,7 @@ cd qa-agent && npm ci && QA_BASE_URL=http://localhost:3000 npm run qa
 |---|---|---|
 | `QA_BASE_URL` | — | Entorno a probar. Obligatoria. |
 | `ANTHROPIC_API_KEY` | — | Credencial de la API. Obligatoria. |
+| `ANTHROPIC_WORKSPACE_ID` | — | Sólo si la key está vinculada a una identidad. |
 | `QA_MODEL` | `claude-haiku-4-5` | Modelo a usar. |
 | `QA_FAIL_ON` | `high` | Gravedad mínima que bloquea el deploy. |
 | `QA_MAX_ITERATIONS` | `20` | Tope de iteraciones del loop agéntico. |

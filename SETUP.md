@@ -61,6 +61,36 @@ El agente de QA necesita credenciales para hablar con Claude.
 Si el secret falta o es inválido, el agente termina con código de salida `2`
 y el pipeline se detiene. No se interpreta como "QA aprobado".
 
+### Si tu API key está vinculada a una identidad
+
+Algunas keys exigen declarar en qué workspace actúa cada request. Se reconocen
+porque la primera corrida falla con:
+
+```
+400 anthropic-workspace-id is required when authenticating with an
+identity-linked API key
+```
+
+El id del workspace está en **console.anthropic.com → Settings → Workspaces**:
+entrá al workspace y copialo (tiene la forma `wrkspc_...`); también aparece en
+la URL del navegador.
+
+Cargalo como **variable** del repositorio, no como secret — no es una credencial,
+y como secret GitHub lo enmascararía justo en los logs donde sirve verlo:
+
+```bash
+gh variable set ANTHROPIC_WORKSPACE_ID
+```
+
+Y en tu terminal, para las corridas locales:
+
+```bash
+export ANTHROPIC_WORKSPACE_ID="wrkspc_..."
+```
+
+Si tu key es de las clásicas, saltéate este paso: sin la variable definida el
+agente no manda el header y funciona igual.
+
 ---
 
 ## 4. Primer deploy
