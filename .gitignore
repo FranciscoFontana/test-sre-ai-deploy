@@ -1,0 +1,20 @@
+# dependencias
+node_modules/
+
+# build
+dist/
+
+# entorno
+.env
+.env.local
+
+# reportes del agente de QA
+qa-report.json
+qa-report.md
+
+# runner self-hosted (por si lo instalás dentro del repo)
+actions-runner/
+
+# sistema
+.DS_Store
+Thumbs.db

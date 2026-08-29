@@ -1,0 +1,193 @@
+name: CI/CD con gate de QA por IA
+
+# Push a main  -> pipeline completo, incluido el deploy a producción.
+# PR hacia main -> build + QA con IA, pero NO toca producción.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+# Dos deploys simultáneos se pisarían sobre la misma infraestructura local.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE_TAG: ${{ github.sha }}
+  QA_BASE_URL: http://localhost:8081
+  PROD_BASE_URL: http://localhost:8080
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # ---------------------------------------------------------------------
+  build:
+    name: Build y tests determinísticos
+    runs-on: [self-hosted, windows]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Instalar dependencias de la app
+        working-directory: app
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: app
+        run: npm run typecheck
+
+      - name: Tests unitarios y de integración
+        working-directory: app
+        run: npm test
+
+      - name: Build de la imagen Docker
+        run: |
+          docker build \
+            -f docker/Dockerfile \
+            -t "todo-app:${IMAGE_TAG}" \
+            --build-arg GIT_SHA="${IMAGE_TAG}" \
+            .
+
+  # ---------------------------------------------------------------------
+  deploy-qa:
+    name: Deploy a QA
+    runs-on: [self-hosted, windows]
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Levantar el entorno de QA
+        env:
+          # Cambiá esto a empty-title o delete-404 para comprobar
+          # que el gate frena el deploy de verdad.
+          SEED_BUG: none
+        run: bash scripts/deploy.sh qa "${IMAGE_TAG}"
+
+  # ---------------------------------------------------------------------
+  ai-qa:
+    name: QA exploratorio con IA
+    runs-on: [self-hosted, windows]
+    needs: deploy-qa
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Instalar dependencias del agente
+        working-directory: qa-agent
+        run: npm ci
+
+      - name: Ejecutar el agente de QA contra el entorno QA
+        id: qa
+        working-directory: qa-agent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          QA_BASE_URL: ${{ env.QA_BASE_URL }}
+          QA_OUT_DIR: ${{ github.workspace }}
+          QA_FAIL_ON: high
+          QA_MAX_ITERATIONS: "20"
+        run: npm run qa
+
+      - name: Publicar el reporte en el resumen del job
+        if: always()
+        run: |
+          if [ -f qa-report.md ]; then
+            cat qa-report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## ⚠️ El agente de QA no llegó a generar un reporte" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "El gate no pudo ejecutarse. Revisá el log del paso anterior." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Guardar el reporte como artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-report-${{ github.sha }}
+          path: |
+            qa-report.md
+            qa-report.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Comentar el reporte en el PR
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs");
+            const body = fs.existsSync("qa-report.md")
+              ? fs.readFileSync("qa-report.md", "utf8")
+              : "## ⚠️ El agente de QA no generó reporte\n\nEl gate no pudo ejecutarse; revisá el log del job.";
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body.slice(0, 65000),
+            });
+
+  # ---------------------------------------------------------------------
+  deploy-prod:
+    name: Deploy a producción
+    runs-on: [self-hosted, windows]
+    needs: ai-qa
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      # Se captura ANTES de desplegar: es la versión a la cual volver si el
+      # smoke test falla. Se lee del contenedor en ejecución, no de un archivo.
+      - name: Registrar la versión actualmente en producción
+        id: previous
+        run: echo "tag=$(bash scripts/current-prod-tag.sh)" >> "$GITHUB_OUTPUT"
+
+      - name: Desplegar en producción
+        run: bash scripts/deploy.sh prod "${IMAGE_TAG}"
+
+      - name: Smoke test determinístico
+        id: smoke
+        run: bash scripts/smoke-prod.sh "${IMAGE_TAG}"
+
+      - name: Rollback si el smoke test falló
+        if: failure() && steps.smoke.outcome == 'failure'
+        run: bash scripts/rollback.sh "${{ steps.previous.outputs.tag }}"
+
+      - name: Resumen del deploy
+        if: always()
+        run: |
+          {
+            echo "## Deploy a producción"
+            echo ""
+            if [ "${{ steps.smoke.outcome }}" = "success" ]; then
+              echo "✅ Producción sirviendo \`${IMAGE_TAG}\` en ${PROD_BASE_URL}"
+            else
+              echo "❌ El deploy falló. Rollback a \`${{ steps.previous.outputs.tag }}\`."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------
+  cleanup:
+    name: Limpieza
+    runs-on: [self-hosted, windows]
+    needs: [deploy-qa, ai-qa, deploy-prod]
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bajar el entorno de QA
+        run: docker compose -f docker/compose.qa.yml down --remove-orphans || true
+
+      - name: Conservar sólo las últimas 5 imágenes
+        run: bash scripts/prune-images.sh 5 || true

@@ -1,0 +1,235 @@
+openapi: 3.0.3
+info:
+  title: Todo API
+  version: 1.0.0
+  description: |
+    API de tareas usada como sujeto de prueba del pipeline de despliegue.
+    Este contrato es la fuente de verdad para el agente de QA: cualquier
+    desviación del comportamiento descripto acá es un bug reportable.
+
+servers:
+  - url: http://localhost:8081
+    description: entorno QA
+  - url: http://localhost:8080
+    description: entorno PROD
+
+paths:
+  /healthz:
+    get:
+      summary: Liveness probe
+      responses:
+        "200":
+          description: El proceso está vivo
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [ok] }
+
+  /readyz:
+    get:
+      summary: Readiness probe
+      responses:
+        "200":
+          description: El proceso puede atender tráfico
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [ready] }
+
+  /version:
+    get:
+      summary: Versión desplegada
+      responses:
+        "200":
+          description: Metadata del build desplegado
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [version, gitSha, startedAt, uptimeSeconds]
+                properties:
+                  version: { type: string }
+                  gitSha: { type: string }
+                  startedAt: { type: string, format: date-time }
+                  uptimeSeconds: { type: integer }
+
+  /api/todos:
+    get:
+      summary: Lista de tareas
+      parameters:
+        - name: done
+          in: query
+          required: false
+          description: Filtra por estado. Sólo acepta los strings "true" o "false".
+          schema:
+            type: string
+            enum: ["true", "false"]
+      responses:
+        "200":
+          description: Lista de tareas, ordenada por createdAt ascendente
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Todo" }
+        "400":
+          description: El parámetro done tiene un valor distinto de "true"/"false"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+    post:
+      summary: Crear una tarea
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                  description: >-
+                    Obligatorio, string, no vacío una vez recortados los espacios,
+                    máximo 200 caracteres.
+                priority:
+                  type: string
+                  enum: [low, med, high]
+                  default: med
+      responses:
+        "201":
+          description: Tarea creada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Todo" }
+        "400":
+          description: |
+            Se devuelve cuando: falta title; title no es string; title está vacío
+            o es sólo espacios; title supera 200 caracteres; priority no pertenece
+            al enum; el cuerpo no es un objeto JSON válido.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "413":
+          description: El cuerpo supera el límite de 100kb
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/todos/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+
+    get:
+      summary: Obtener una tarea por id
+      responses:
+        "200":
+          description: La tarea pedida
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Todo" }
+        "404":
+          description: No existe una tarea con ese id
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+    patch:
+      summary: Actualizar parcialmente una tarea
+      description: Todos los campos son opcionales; sólo se aplican los presentes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string, minLength: 1, maxLength: 200 }
+                done: { type: boolean }
+                priority: { type: string, enum: [low, med, high] }
+      responses:
+        "200":
+          description: Tarea actualizada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Todo" }
+        "400":
+          description: Algún campo presente tiene tipo o valor inválido
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No existe una tarea con ese id
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+    delete:
+      summary: Eliminar una tarea
+      responses:
+        "204":
+          description: Eliminada. Sin cuerpo de respuesta.
+        "404":
+          description: No existe una tarea con ese id
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+components:
+  schemas:
+    Todo:
+      type: object
+      required: [id, title, done, priority, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        done: { type: boolean }
+        priority: { type: string, enum: [low, med, high] }
+        createdAt: { type: string, format: date-time }
+
+    Error:
+      type: object
+      required: [error]
+      description: Forma uniforme de error en toda la API.
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum:
+                [
+                  VALIDATION_ERROR,
+                  NOT_FOUND,
+                  MALFORMED_JSON,
+                  PAYLOAD_TOO_LARGE,
+                  INTERNAL_ERROR,
+                ]
+            message: { type: string }
+            details: {}
+
+# Invariantes que el contrato exige y que el agente de QA debe verificar
+x-invariants:
+  - "Toda respuesta de error usa la forma { error: { code, message } }. Nunca HTML."
+  - "Cualquier ruta bajo /api que no exista devuelve 404 con code NOT_FOUND en JSON."
+  - "Una tarea creada con POST debe poder leerse con GET /api/todos/{id} con los mismos valores."
+  - "Una tarea eliminada deja de aparecer en GET /api/todos y su GET por id devuelve 404."
+  - "La API nunca debe responder 5xx ante una entrada malformada del cliente."
+  - "Ningún endpoint expone la configuración interna del servidor ni variables de entorno."
