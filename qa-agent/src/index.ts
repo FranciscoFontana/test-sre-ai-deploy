@@ -49,7 +49,12 @@ const config = {
   // Pinneado a propósito en vez de usar el alias gemini-flash-latest: este
   // modelo es el gate de un deploy, y no quiero que cambie solo bajo los pies.
   // Ver los modelos disponibles para tu key: el agente los lista ante un 404.
-  model: process.env.QA_MODEL ?? "gemini-3.6-flash",
+  //
+  // Elegido por medición, no por tamaño. Contra la misma app con un bug
+  // sembrado: 3.6-flash y 3.5-flash produjeron llamadas mal formadas y no
+  // cerraron solos; flash-lite cerró en 5 iteraciones, sin llamadas corruptas
+  // y con 29k tokens contra 271k. Además es el de mayor cuota diaria gratuita.
+  model: process.env.QA_MODEL ?? "gemini-3.5-flash-lite",
   // Medido: el agente hace el trabajo útil en las primeras 5 iteraciones y
   // después se queda girando, una request por turno, sin converger. Como cada
   // iteración reenvía todo el historial, las de más cuestan cuota y no aportan.

@@ -122,7 +122,10 @@ export function buildMarkdownReport(session: QaSession, meta: RunMeta, gate: Gat
     lines.push("");
   }
 
-  if (session.outcome) {
+  // Cuando el veredicto es fail ya aparece entre los motivos del bloqueo, y
+  // repetirlo textualmente dos veces seguidas ensucia el reporte que se
+  // comenta en el PR. La consola sí necesita los motivos completos.
+  if (session.outcome && session.outcome.verdict !== "fail") {
     lines.push(`> **Veredicto del agente (${session.outcome.verdict}):** ${session.outcome.summary}`);
     lines.push("");
   }

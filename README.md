@@ -73,7 +73,7 @@ iteraciones — también cuenta como fallo por cobertura incompleta.
 
 ## Costo
 
-El agente corre con **Gemini 3.6 Flash en la capa gratuita** de Google AI Studio:
+El agente corre con **Gemini 3.5 Flash Lite en la capa gratuita** de Google AI Studio:
 sin tarjeta de crédito y sin costo por corrida. Lo que se consume es cuota, no dinero.
 
 Los límites de la capa gratuita son acotados — del orden de 10 requests por minuto
@@ -132,7 +132,7 @@ cd qa-agent && npm ci && QA_BASE_URL=http://localhost:3000 npm run qa
 |---|---|---|
 | `QA_BASE_URL` | — | Entorno a probar. Obligatoria. |
 | `GEMINI_API_KEY` | — | Credencial de Google AI Studio. Obligatoria. |
-| `QA_MODEL` | `gemini-3.6-flash` | Modelo a usar. |
+| `QA_MODEL` | `gemini-3.5-flash-lite` | Modelo a usar. |
 | `QA_FAIL_ON` | `high` | Gravedad mínima que bloquea el deploy. |
 | `QA_MAX_ITERATIONS` | `12` | Tope de iteraciones del loop agéntico. |
 | `QA_MAX_REQUESTS` | `80` | Tope de requests HTTP por corrida. |
