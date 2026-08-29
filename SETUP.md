@@ -80,8 +80,12 @@ un deploy. Si aun así se rinde, el mensaje te dice que probablemente sea la cuo
 diaria agotada, no un problema de la aplicación.
 
 Si te quedás sin cuota seguido, bajá `QA_MAX_ITERATIONS` para gastar menos por
-corrida, o cambiá `QA_MODEL` a `gemini-2.5-flash-lite`, que tiene cuota diaria
-más alta a cambio de algo de calidad.
+corrida, o cambiá `QA_MODEL` a un modelo *flash-lite*, que tiene cuota diaria más alta
+a cambio de algo de calidad.
+
+Los ids de modelo cambian seguido y Google va cerrando los viejos para cuentas
+nuevas. Si ves un `404`, el agente lista los modelos disponibles para tu key:
+elegí uno de esa lista y pasalo por `QA_MODEL`.
 
 ## 4. Primer deploy
 

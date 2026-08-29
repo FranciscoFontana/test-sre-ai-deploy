@@ -46,7 +46,10 @@ function parseSeverity(raw: string | undefined, fallback: Severity): Severity {
 const config = {
   baseUrl: readArg("--base-url") ?? process.env.QA_BASE_URL,
   apiKey: process.env.GEMINI_API_KEY,
-  model: process.env.QA_MODEL ?? "gemini-2.5-flash",
+  // Pinneado a propósito en vez de usar el alias gemini-flash-latest: este
+  // modelo es el gate de un deploy, y no quiero que cambie solo bajo los pies.
+  // Ver los modelos disponibles para tu key: el agente los lista ante un 404.
+  model: process.env.QA_MODEL ?? "gemini-3.6-flash",
   maxIterations: Number(process.env.QA_MAX_ITERATIONS ?? 20),
   maxRequests: Number(process.env.QA_MAX_REQUESTS ?? 80),
   maxOutputTokens: Number(process.env.QA_MAX_OUTPUT_TOKENS ?? 4096),
