@@ -58,6 +58,21 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
+ * Distingue un 429 por cuota diaria de uno por límite por minuto.
+ *
+ * Importa porque cambia qué hacer: el límite por minuto se destraba esperando,
+ * la cuota diaria no. Reintentar cinco veces contra una cuota agotada son cien
+ * segundos tirados y un diagnóstico peor.
+ *
+ * Google identifica la cuota en el cuerpo del error (por ejemplo
+ * GenerateRequestsPerDayPerProjectPerModel). Si el formato cambia y no hay
+ * coincidencia, se cae al comportamiento anterior: reintentar.
+ */
+function isDailyQuotaError(message: string): boolean {
+  return /per\s*day|perday|daily limit|cuota diaria/i.test(message);
+}
+
+/**
  * Traduce los errores del SDK a algo accionable.
  *
  * La distinción importante es entre quedarse sin cuota del día (no hay nada
@@ -74,10 +89,14 @@ function describeApiError(error: ApiError): string {
     return `Gemini rechazó la request por permisos (403): ${message}`;
   }
   if (status === 429) {
+    const base = isDailyQuotaError(message)
+      ? "Se agotó la cuota DIARIA de este modelo en la capa gratuita."
+      : "Gemini devolvió 429 incluso después de reintentar con backoff, probablemente por cuota diaria agotada.";
     return [
-      "Gemini devolvió 429 incluso después de reintentar con backoff.",
-      "En capa gratuita esto suele ser la cuota diaria agotada, no el límite por minuto.",
-      "Probá de nuevo mañana, o bajá QA_MAX_ITERATIONS para gastar menos por corrida.",
+      base,
+      "La cuota gratuita es por modelo: probá otro con QA_MODEL, por ejemplo",
+      "QA_MODEL=gemini-3.5-flash-lite (los modelos lite tienen la cuota diaria más alta).",
+      "Si ya los agotaste todos, se renueva sola en el próximo ciclo diario.",
     ].join(" ");
   }
   if (status === 404) {
@@ -105,7 +124,16 @@ async function callWithRetry<T>(fn: () => Promise<T>, label: string): Promise<T>
       if (status === undefined || !RETRY_STATUSES.has(status) || attempt === MAX_RETRIES) {
         break;
       }
-      // 429 en capa gratuita se destraba esperando: el límite es por minuto.
+      if (status === 429 && error instanceof ApiError && isDailyQuotaError(error.message ?? "")) {
+        // Esperar no sirve: la cuota diaria no se renueva en un minuto.
+        break;
+      }
+      if (status === 429 && attempt === 0 && error instanceof ApiError) {
+        // Se muestra el detalle de Google la primera vez: dice qué cuota se
+        // agotó y en cuánto se renueva, que es justo lo que hace falta saber.
+        console.log(`[qa-agent] detalle del 429: ${(error.message ?? "").slice(0, 400)}`);
+      }
+      // Un 429 por límite por minuto sí se destraba esperando.
       const waitMs = status === 429 ? 20_000 : 2_000 * 2 ** attempt;
       console.log(
         `[qa-agent] ${label}: ${status}, reintento ${attempt + 1}/${MAX_RETRIES} en ${Math.round(waitMs / 1000)}s`,
