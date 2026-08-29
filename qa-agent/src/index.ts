@@ -52,7 +52,10 @@ const config = {
   model: process.env.QA_MODEL ?? "gemini-3.6-flash",
   maxIterations: Number(process.env.QA_MAX_ITERATIONS ?? 20),
   maxRequests: Number(process.env.QA_MAX_REQUESTS ?? 80),
-  maxOutputTokens: Number(process.env.QA_MAX_OUTPUT_TOKENS ?? 4096),
+  // Gemini 3.x razona antes de responder y ese pensamiento consume presupuesto
+  // de salida. Con un tope bajo el modelo se queda sin margen justo antes de
+  // emitir la llamada de cierre y devuelve una respuesta vacía.
+  maxOutputTokens: Number(process.env.QA_MAX_OUTPUT_TOKENS ?? 16384),
   failOn: parseSeverity(readArg("--fail-on") ?? process.env.QA_FAIL_ON, "high"),
   outDir: readArg("--out-dir") ?? process.env.QA_OUT_DIR ?? process.cwd(),
   contractPath: process.env.QA_CONTRACT_PATH ?? join(REPO_ROOT, "contracts", "openapi.yaml"),
@@ -144,10 +147,12 @@ async function main(): Promise<void> {
 
   if (result.neededClosingNudge) {
     console.log(
-      "[qa-agent] el modelo se dio por terminado sin llamar a finish_run; se le forzó el cierre",
+      `[qa-agent] el modelo cortó sin llamar a finish_run (finishReason=${result.finishReason}); se le forzó el cierre`,
     );
     if (result.finalText.trim().length > 0) {
       console.log(`[qa-agent] texto con el que había cerrado: ${result.finalText.trim()}`);
+    } else {
+      console.log("[qa-agent] no devolvió texto: la respuesta vino vacía");
     }
   }
 

@@ -23,6 +23,8 @@ export interface AgentRunResult {
   finalText: string;
   /** true si hizo falta forzar la llamada de cierre. */
   neededClosingNudge: boolean;
+  /** Por qué el modelo dejó de llamar herramientas (STOP, MAX_TOKENS, ...). */
+  finishReason: string;
 }
 
 export interface AgentRunOptions {
@@ -156,6 +158,7 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
   let stoppedNaturally = false;
   let finalText = "";
   let neededClosingNudge = false;
+  let finishReason = "";
 
   const accumulate = (metadata: {
     promptTokenCount?: number;
@@ -212,9 +215,15 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
     }
 
     if (calls.length === 0) {
-      // El modelo dejó de pedir herramientas: se dio por terminado.
+      // El modelo dejó de pedir herramientas. Puede ser que se haya dado por
+      // terminado, o que lo hayan cortado: finishReason distingue los casos.
+      // MAX_TOKENS acá significa que se quedó sin presupuesto de salida —en un
+      // modelo que razona, el pensamiento también consume— y quedó truncado
+      // antes de poder emitir la llamada de cierre.
       finalText = response.text ?? "";
+      finishReason = String(response.candidates?.[0]?.finishReason ?? "sin finishReason");
       stoppedNaturally = true;
+      options.onIteration(iterations);
       break;
     }
 
@@ -287,5 +296,6 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
     hitIterationCap: !stoppedNaturally,
     finalText,
     neededClosingNudge,
+    finishReason,
   };
 }
