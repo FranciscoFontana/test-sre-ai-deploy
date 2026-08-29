@@ -145,56 +145,57 @@ export function buildTools(session: QaSession): QaTool[] {
       "Sólo reportá cosas que hayas verificado con una request real y que contradigan el contrato OpenAPI.",
       "Un finding sin reproducción concreta no sirve.",
     ].join(" "),
+    // Esquema deliberadamente chato y con descripciones de una línea.
+    //
+    // La versión anterior metía los criterios de severidad (cinco líneas) dentro
+    // de la descripción del campo, y pedía en `reproduction` el cuerpo de la
+    // request y de la respuesta —o sea, JSON anidado con comillas dentro de un
+    // argumento JSON—. Gemini devolvía MALFORMED_FUNCTION_CALL una y otra vez y
+    // el hallazgo nunca llegaba a registrarse.
+    //
+    // Los criterios de severidad viven ahora en el prompt de sistema, que es
+    // texto libre y no tiene que sobrevivir a una serialización.
     inputSchema: {
       type: "object",
       properties: {
-        severity: {
-          type: "string",
-          enum: [...SEVERITIES],
-          description: [
-            "critical: pérdida o corrupción de datos, 5xx ante entrada normal, exposición de datos internos.",
-            "high: viola el contrato de forma que rompe a un cliente (status incorrecto, validación ausente).",
-            "medium: desviación real del contrato con impacto acotado.",
-            "low: inconsistencia menor.",
-            "info: observación que no es un bug.",
-          ].join(" "),
-        },
+        severity: { type: "string", enum: [...SEVERITIES] },
         title: { type: "string", description: "Resumen en una línea." },
-        endpoint: {
+        endpoint: { type: "string", description: "Método y path. Ej: POST /api/todos" },
+        expected: { type: "string", description: "Qué exige el contrato." },
+        actual: { type: "string", description: "Qué devolvió la aplicación." },
+        request_sent: {
           type: "string",
-          description: "Método y path afectados. Ej: POST /api/todos",
+          description: "La request que lo demuestra, en texto plano y en una línea.",
         },
-        expected: {
+        response_seen: {
           type: "string",
-          description: "Qué exige el contrato, citando la parte relevante del OpenAPI.",
-        },
-        actual: { type: "string", description: "Qué devolvió realmente la aplicación." },
-        reproduction: {
-          type: "string",
-          description:
-            "Pasos exactos: método, path, cuerpo enviado y respuesta observada (status y cuerpo).",
+          description: "El status y lo esencial del cuerpo, en texto plano y en una línea.",
         },
       },
-      required: ["severity", "title", "endpoint", "expected", "actual", "reproduction"],
+      required: ["severity", "title", "endpoint", "expected", "actual", "request_sent"],
     },
     run: async (args) => {
       const severity = asString(args.severity);
       if (severity === undefined || !(SEVERITIES as readonly string[]).includes(severity)) {
         return JSON.stringify({ error: `severity inválida. Usá una de: ${SEVERITIES.join(", ")}.` });
       }
-      for (const field of ["title", "endpoint", "expected", "actual", "reproduction"] as const) {
+      for (const field of ["title", "endpoint", "expected", "actual", "request_sent"] as const) {
         if (asString(args[field]) === undefined) {
           return JSON.stringify({ error: `Falta el campo ${field} o no es un string.` });
         }
       }
 
+      const responseSeen = asString(args.response_seen);
       session.findings.push({
         severity: severity as Severity,
         title: args.title as string,
         endpoint: args.endpoint as string,
         expected: args.expected as string,
         actual: args.actual as string,
-        reproduction: args.reproduction as string,
+        reproduction: [
+          `Request:  ${args.request_sent as string}`,
+          ...(responseSeen !== undefined ? [`Response: ${responseSeen}`] : []),
+        ].join("\n"),
       });
       return JSON.stringify({ recorded: true, totalFindings: session.findings.length });
     },

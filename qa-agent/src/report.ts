@@ -48,6 +48,16 @@ export function decideGate(session: QaSession, failOn: Severity, hitIterationCap
     );
   } else if (session.outcome.verdict === "fail") {
     reasons.push(`Veredicto del agente: fail — ${session.outcome.summary}`);
+    // El veredicto y los findings deberían contar la misma historia. Que no
+    // coincidan casi siempre significa que report_finding falló y el detalle
+    // quedó sólo como prosa: el bloqueo es correcto, pero el reporte queda
+    // sin nada accionable para quien tenga que arreglarlo.
+    if (session.findings.length === 0) {
+      reasons.push(
+        "El agente cerró con fail pero no registró ningún finding con report_finding: " +
+          "el detalle existe sólo en el resumen y el reporte queda sin evidencia estructurada.",
+      );
+    }
   }
   if (session.requestCount === 0) {
     reasons.push("El agente no ejecutó ninguna request HTTP: la corrida no probó nada.");

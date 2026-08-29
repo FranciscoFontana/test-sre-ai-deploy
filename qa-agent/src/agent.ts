@@ -50,6 +50,8 @@ export class AgentError extends Error {}
 
 const RETRY_STATUSES = new Set([429, 500, 502, 503, 504]);
 const MAX_RETRIES = 5;
+/** Cuántas veces se reintenta un turno cuya llamada a herramienta salió corrupta. */
+const MAX_MALFORMED_RETRIES = 3;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -159,6 +161,7 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
   let finalText = "";
   let neededClosingNudge = false;
   let finishReason = "";
+  let malformedRetries = 0;
 
   const accumulate = (metadata: {
     promptTokenCount?: number;
@@ -207,26 +210,40 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
     accumulate(response.usageMetadata);
 
     const calls = response.functionCalls ?? [];
-    const modelParts = response.candidates?.[0]?.content?.parts;
-    if (modelParts && modelParts.length > 0) {
-      contents.push({ role: "model", parts: modelParts });
-    } else if (calls.length > 0) {
-      contents.push({ role: "model", parts: calls.map((call) => ({ functionCall: call })) });
-    }
+    const reason = String(response.candidates?.[0]?.finishReason ?? "sin finishReason");
 
     if (calls.length === 0) {
-      // El modelo dejó de pedir herramientas. Puede ser que se haya dado por
-      // terminado, o que lo hayan cortado: finishReason distingue los casos.
-      // MAX_TOKENS acá significa que se quedó sin presupuesto de salida —en un
-      // modelo que razona, el pensamiento también consume— y quedó truncado
-      // antes de poder emitir la llamada de cierre.
+      // El modelo dejó de pedir herramientas. finishReason distingue por qué:
+      // STOP es que se dio por terminado; MAX_TOKENS que se quedó sin
+      // presupuesto de salida; MALFORMED_FUNCTION_CALL que sí quiso llamar una
+      // herramienta pero la llamada salió corrupta.
+      //
+      // Ese último caso se destraba reintentando el mismo turno, y conviene
+      // hacerlo: darlo por terminado descarta un hallazgo que el modelo ya
+      // tenía. No se agrega nada a `contents` para no dejar un turno colgado.
+      if (reason === "MALFORMED_FUNCTION_CALL" && malformedRetries < MAX_MALFORMED_RETRIES) {
+        malformedRetries += 1;
+        console.log(
+          `[qa-agent] llamada mal formada, reintento ${malformedRetries}/${MAX_MALFORMED_RETRIES}`,
+        );
+        continue;
+      }
+
       finalText = response.text ?? "";
-      finishReason = String(response.candidates?.[0]?.finishReason ?? "sin finishReason");
+      finishReason = reason;
       stoppedNaturally = true;
       options.onIteration(iterations);
       break;
     }
 
+    const modelParts = response.candidates?.[0]?.content?.parts;
+    contents.push({
+      role: "model",
+      parts:
+        modelParts && modelParts.length > 0
+          ? modelParts
+          : calls.map((call) => ({ functionCall: call })),
+    });
     contents.push({ role: "user", parts: await executeCalls(calls) });
     // Se loguea después de ejecutar, para que los contadores reflejen
     // lo que ya pasó y no el estado previo a esta iteración.
