@@ -1,9 +1,11 @@
-import type Anthropic from "@anthropic-ai/sdk";
-
 /**
- * Reglas de QA. Este texto es ESTABLE entre corridas a propósito: junto con
- * el contrato forma el prefijo cacheado. No metas acá nada variable
- * (fechas, URLs, SHAs) o el prompt caching deja de aplicar en silencio.
+ * Reglas de QA.
+ *
+ * Junto con el contrato forman la instrucción de sistema, que se manda igual
+ * en cada iteración. En la capa gratuita de Gemini no hay prompt caching, así
+ * que este bloque se paga completo cada vez — pero como el tier es gratuito,
+ * el costo real es cuota de tokens por minuto, no dinero. Mantenerlo acotado
+ * sigue importando para no chocar contra ese límite.
  */
 const QA_RULES = `Sos un ingeniero de QA probando una API REST recién desplegada en un entorno de pruebas.
 Tu reporte decide si este build se promueve a producción o se frena.
@@ -46,6 +48,11 @@ Trabajá de forma sistemática, no al azar:
   te llamó la atención.
 - Si algo te resulta ambiguo en el contrato, tratalo como que NO es un bug y seguí.
 
+# Cómo trabajar
+
+Podés pedir varias herramientas en un mismo turno cuando las requests son
+independientes: aprovecharlo reduce la cantidad de iteraciones que consumís.
+
 # Cómo terminar
 
 Cuando hayas cubierto los seis puntos de arriba, llamá a finish_run exactamente una vez.
@@ -53,26 +60,29 @@ Usá verdict "fail" si encontraste algo que debería frenar el deploy, y "pass" 
 aplicación respeta el contrato. Cerrar la corrida es obligatorio: si terminás sin
 llamar a finish_run, la corrida se considera fallida por incompleta.
 
-Tenés un presupuesto acotado de requests. Priorizá cobertura amplia del contrato por
-encima de explorar un mismo endpoint en profundidad.`;
+Tenés un presupuesto acotado de iteraciones y de requests. Priorizá cobertura amplia
+del contrato por encima de explorar un mismo endpoint en profundidad.`;
 
-export function buildSystem(openapiYaml: string): Anthropic.Beta.BetaTextBlockParam[] {
+export function buildSystemInstruction(openapiYaml: string): string {
   return [
-    { type: "text", text: QA_RULES },
-    {
-      type: "text",
-      text: `# Contrato OpenAPI de la aplicación bajo prueba\n\n\`\`\`yaml\n${openapiYaml}\n\`\`\``,
-      // El breakpoint va al final del bloque estable: reglas + contrato se
-      // sirven del caché a partir de la segunda iteración de la corrida.
-      cache_control: { type: "ephemeral" },
-    },
-  ];
+    QA_RULES,
+    "",
+    "# Contrato OpenAPI de la aplicación bajo prueba",
+    "",
+    "```yaml",
+    openapiYaml,
+    "```",
+  ].join("\n");
 }
 
-export function buildInitialUserMessage(baseUrl: string, maxRequests: number): string {
+export function buildInitialUserMessage(
+  baseUrl: string,
+  maxRequests: number,
+  maxIterations: number,
+): string {
   return [
     `La aplicación está desplegada y respondiendo en ${baseUrl}.`,
-    `Tenés hasta ${maxRequests} requests HTTP para esta corrida.`,
+    `Tenés hasta ${maxRequests} requests HTTP y ${maxIterations} iteraciones para esta corrida.`,
     "Empezá ahora: probá la API contra el contrato y reportá lo que encuentres.",
   ].join(" ");
 }

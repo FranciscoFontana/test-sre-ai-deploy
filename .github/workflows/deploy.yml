@@ -93,12 +93,7 @@ jobs:
         id: qa
         working-directory: qa-agent
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          # Sólo hace falta si la API key está vinculada a una identidad.
-          # Va como variable y no como secret a propósito: no es una credencial,
-          # y si fuera secret GitHub lo enmascararía en los logs del agente,
-          # que es justo donde se lo quiere ver al diagnosticar.
-          ANTHROPIC_WORKSPACE_ID: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           QA_BASE_URL: ${{ env.QA_BASE_URL }}
           QA_OUT_DIR: ${{ github.workspace }}
           QA_FAIL_ON: high

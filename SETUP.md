@@ -50,48 +50,38 @@ El runner tiene que quedar en estado **Idle** en la página de Runners.
 
 ---
 
-## 3. Secret con la API key de Anthropic
+## 3. Secret con la API key de Gemini
 
-El agente de QA necesita credenciales para hablar con Claude.
+El agente de QA necesita credenciales para hablar con el modelo. Usamos la
+**capa gratuita de Google AI Studio**: no pide tarjeta de crédito.
 
-1. Conseguí una API key en <https://console.anthropic.com/settings/keys>.
-2. En GitHub: **Settings → Secrets and variables → Actions → New repository secret**.
-3. Nombre exacto: `ANTHROPIC_API_KEY`. Pegá la key como valor.
+1. Entrá a <https://aistudio.google.com> y dale a **Get API key** -> *Create API key*.
+2. Cargala como secret del repositorio. Este comando te la pide con un prompt,
+   así no queda en el historial de la terminal:
+
+```bash
+gh secret set GEMINI_API_KEY
+```
+
+También podés cargarla por la web: **Settings -> Secrets and variables -> Actions
+-> New repository secret**, con el nombre exacto `GEMINI_API_KEY`.
 
 Si el secret falta o es inválido, el agente termina con código de salida `2`
 y el pipeline se detiene. No se interpreta como "QA aprobado".
 
-### Si tu API key está vinculada a una identidad
+### Sobre los límites de la capa gratuita
 
-Algunas keys exigen declarar en qué workspace actúa cada request. Se reconocen
-porque la primera corrida falla con:
+La capa gratuita limita las requests por minuto y por día, y Google ajusta esos
+números con el tiempo — tus límites vigentes los ves en el panel de AI Studio.
 
-```
-400 anthropic-workspace-id is required when authenticating with an
-identity-linked API key
-```
+El agente ya contempla esto: ante un `429` espera y reintenta con backoff, porque
+en capa gratuita chocar contra el límite por minuto es normal y no debería frenar
+un deploy. Si aun así se rinde, el mensaje te dice que probablemente sea la cuota
+diaria agotada, no un problema de la aplicación.
 
-El id del workspace está en **console.anthropic.com → Settings → Workspaces**:
-entrá al workspace y copialo (tiene la forma `wrkspc_...`); también aparece en
-la URL del navegador.
-
-Cargalo como **variable** del repositorio, no como secret — no es una credencial,
-y como secret GitHub lo enmascararía justo en los logs donde sirve verlo:
-
-```bash
-gh variable set ANTHROPIC_WORKSPACE_ID
-```
-
-Y en tu terminal, para las corridas locales:
-
-```bash
-export ANTHROPIC_WORKSPACE_ID="wrkspc_..."
-```
-
-Si tu key es de las clásicas, saltéate este paso: sin la variable definida el
-agente no manda el header y funciona igual.
-
----
+Si te quedás sin cuota seguido, bajá `QA_MAX_ITERATIONS` para gastar menos por
+corrida, o cambiá `QA_MODEL` a `gemini-2.5-flash-lite`, que tiene cuota diaria
+más alta a cambio de algo de calidad.
 
 ## 4. Primer deploy
 

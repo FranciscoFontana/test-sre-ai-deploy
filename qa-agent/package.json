@@ -10,7 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.68.0"
+    "@google/genai": "^2.19.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
