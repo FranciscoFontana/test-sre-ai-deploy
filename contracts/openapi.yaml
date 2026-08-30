@@ -70,20 +70,50 @@ paths:
           schema:
             type: string
             enum: ["true", "false"]
+        - name: q
+          in: query
+          required: false
+          description: >-
+            Filtra por texto contenido en el título, SIN distinguir mayúsculas
+            de minúsculas. Máximo 100 caracteres; más largo devuelve 400.
+          schema:
+            type: string
+            maxLength: 100
+        - name: sort
+          in: query
+          required: false
+          description: Campo por el cual ordenar. Por defecto createdAt.
+          schema:
+            type: string
+            enum: [createdAt, title, priority]
+        - name: order
+          in: query
+          required: false
+          description: Sentido del orden. Por defecto asc.
+          schema:
+            type: string
+            enum: [asc, desc]
       responses:
         "200":
-          description: Lista de tareas, ordenada por createdAt ascendente
+          description: >-
+            Lista de tareas ya filtrada y ordenada, más los contadores
+            globales. Los contadores son SIEMPRE sobre el total de tareas, no
+            sobre el subconjunto filtrado.
           content:
             application/json:
               schema:
                 type: object
-                required: [items]
+                required: [items, counts]
                 properties:
                   items:
                     type: array
                     items: { $ref: "#/components/schemas/Todo" }
+                  counts: { $ref: "#/components/schemas/Counts" }
         "400":
-          description: El parámetro done tiene un valor distinto de "true"/"false"
+          description: >-
+            Algún parámetro de consulta es inválido: done distinto de
+            "true"/"false", sort u order fuera de su enum, o q de más de
+            100 caracteres.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -135,6 +165,44 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+
+  /api/todos/complete-all:
+    post:
+      summary: Marcar todas las tareas pendientes como completadas
+      description: >-
+        Idempotente: llamarlo dos veces seguidas devuelve updated 0 la segunda
+        vez. Con la lista vacía responde 200 con updated 0, nunca un error.
+      responses:
+        "200":
+          description: Cuántas tareas cambiaron, más los contadores resultantes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [updated, counts]
+                properties:
+                  updated: { type: integer, minimum: 0 }
+                  counts: { $ref: "#/components/schemas/Counts" }
+
+  /api/todos/completed:
+    delete:
+      summary: Eliminar todas las tareas completadas
+      description: >-
+        Elimina sólo las completadas y deja intactas las pendientes. Con la
+        lista vacía responde 200 con deleted 0, nunca un error. Esta ruta se
+        resuelve antes que /api/todos/{id}: "completed" NO se interpreta como
+        un id.
+      responses:
+        "200":
+          description: Cuántas tareas se borraron, más los contadores resultantes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deleted, counts]
+                properties:
+                  deleted: { type: integer, minimum: 0 }
+                  counts: { $ref: "#/components/schemas/Counts" }
 
   /api/todos/{id}:
     parameters:
@@ -209,6 +277,15 @@ components:
         done: { type: boolean }
         priority: { type: string, enum: [low, med, high] }
         createdAt: { type: string, format: date-time }
+
+    Counts:
+      type: object
+      description: Totales globales, independientes de los filtros aplicados.
+      required: [total, pending, done]
+      properties:
+        total: { type: integer, minimum: 0 }
+        pending: { type: integer, minimum: 0 }
+        done: { type: integer, minimum: 0 }
 
     Error:
       type: object

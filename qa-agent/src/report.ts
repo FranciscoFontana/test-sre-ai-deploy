@@ -7,6 +7,7 @@ import {
   type RequestLogEntry,
   type RunOutcome,
   type Severity,
+  type UiActionEntry,
 } from "./session.js";
 
 export interface RunMeta {
@@ -26,11 +27,16 @@ export interface GateDecision {
   reasons: string[];
 }
 
-/** Un grupo de requests que compartían la misma intención declarada. */
+/**
+ * Un chequeo: todo lo que el agente hizo bajo una misma intención declarada,
+ * sin importar si fue contra la API o contra la interfaz. Una verificación
+ * puede tener evidencia de las dos superficies.
+ */
 export interface CheckGroup {
   purpose: string;
   entries: RequestLogEntry[];
-  /** true si algún finding apunta al mismo endpoint que este chequeo. */
+  uiEntries: UiActionEntry[];
+  /** true si un finding apunta al mismo endpoint, o si una acción de UI falló. */
   failed: boolean;
 }
 
@@ -43,6 +49,7 @@ export interface ReportData {
   coverage: CoverageReport;
   checks: CheckGroup[];
   requestLog: RequestLogEntry[];
+  uiLog: UiActionEntry[];
 }
 
 /**
@@ -109,32 +116,45 @@ function parseEndpoint(endpoint: string): { method: string; path: string } | nul
  */
 export function buildChecks(
   requestLog: RequestLogEntry[],
+  uiLog: UiActionEntry[],
   findings: Finding[],
 ): CheckGroup[] {
   const endpointsConFalla = findings
     .map((f) => parseEndpoint(f.endpoint))
     .filter((e): e is { method: string; path: string } => e !== null);
 
-  const grupos = new Map<string, RequestLogEntry[]>();
-  for (const entry of requestLog) {
-    const purpose = entry.purpose?.trim() || "(sin intención declarada)";
-    const actual = grupos.get(purpose);
-    if (actual) actual.push(entry);
-    else grupos.set(purpose, [entry]);
-  }
+  const SIN_INTENCION = "(sin intención declarada)";
+  const grupos = new Map<string, CheckGroup>();
 
-  return [...grupos.entries()].map(([purpose, entries]) => ({
-    purpose,
-    entries,
-    failed: entries.some((entry) =>
+  const obtener = (purpose: string): CheckGroup => {
+    const clave = purpose.trim() || SIN_INTENCION;
+    let grupo = grupos.get(clave);
+    if (!grupo) {
+      grupo = { purpose: clave, entries: [], uiEntries: [], failed: false };
+      grupos.set(clave, grupo);
+    }
+    return grupo;
+  };
+
+  for (const entry of requestLog) obtener(entry.purpose ?? "").entries.push(entry);
+  for (const entry of uiLog) obtener(entry.purpose ?? "").uiEntries.push(entry);
+
+  for (const grupo of grupos.values()) {
+    const porFinding = grupo.entries.some((entry) =>
       endpointsConFalla.some((fallo) => {
         if (fallo.method !== entry.method) return false;
         // El endpoint del finding puede venir como plantilla (/api/todos/{id}).
         const base = fallo.path.replace(/\{[^}]*\}/g, "").replace(/\/+$/, "");
         return entry.path.toUpperCase().startsWith(base);
       }),
-    ),
-  }));
+    );
+    // Una acción de UI que no se pudo ejecutar es un fallo directo, no
+    // derivado: el botón no estaba, o no respondió.
+    const porUi = grupo.uiEntries.some((entry) => !entry.ok);
+    grupo.failed = porFinding || porUi;
+  }
+
+  return [...grupos.values()];
 }
 
 export function buildReportData(
@@ -152,8 +172,9 @@ export function buildReportData(
     ),
     counts: session.countsBySeverity(),
     coverage: buildCoverage(openapiYaml, session.requestLog),
-    checks: buildChecks(session.requestLog, session.findings),
+    checks: buildChecks(session.requestLog, session.uiLog, session.findings),
     requestLog: session.requestLog,
+    uiLog: session.uiLog,
   };
 }
 
@@ -174,9 +195,15 @@ export function buildJsonReport(data: ReportData) {
       purpose: c.purpose,
       failed: c.failed,
       requests: c.entries.length,
+      uiActions: c.uiEntries.length,
     })),
     findings: data.findings,
     requestLog: data.requestLog,
+    // Sin las capturas: son cientos de KB de base64 y ya están en el HTML.
+    uiLog: data.uiLog.map(({ screenshot, ...resto }) => ({
+      ...resto,
+      hasScreenshot: screenshot !== undefined,
+    })),
   };
 }
 
@@ -236,6 +263,7 @@ export function buildMarkdownReport(data: ReportData): string {
   lines.push(`| Modelo | \`${meta.model}\` |`);
   lines.push(`| Chequeos ejecutados | ${checks.length} |`);
   lines.push(`| Requests HTTP | ${data.requestLog.length} |`);
+  lines.push(`| Acciones sobre la interfaz | ${data.uiLog.length} |`);
   lines.push(`| Cobertura del contrato | ${coverage.covered} de ${coverage.total} casos |`);
   lines.push(
     `| Iteraciones | ${meta.iterations} / ${meta.maxIterations}${meta.hitIterationCap ? " (tope alcanzado)" : ""} |`,
@@ -282,12 +310,20 @@ export function buildMarkdownReport(data: ReportData): string {
   // --- Chequeos --------------------------------------------------------
   lines.push("## Qué probó el agente");
   lines.push("");
-  lines.push("| | Chequeo | Requests | Resultados |");
+  lines.push("| | Chequeo | Superficie | Evidencia |");
   lines.push("|---|---|---|---|");
   for (const check of checks) {
     const marca = check.failed ? "❌" : "✅";
-    const statuses = check.entries.map(statusCell).join(", ");
-    lines.push(`| ${marca} | ${check.purpose} | ${check.entries.length} | ${statuses} |`);
+    const superficies: string[] = [];
+    if (check.entries.length > 0) superficies.push(`API (${check.entries.length})`);
+    if (check.uiEntries.length > 0) superficies.push(`UI (${check.uiEntries.length})`);
+    const evidencia = [
+      ...check.entries.map(statusCell),
+      ...check.uiEntries.map((e) => (e.ok ? e.action : `${e.action} falló`)),
+    ].join(", ");
+    lines.push(
+      `| ${marca} | ${check.purpose} | ${superficies.join(" + ")} | ${evidencia} |`,
+    );
   }
   lines.push("");
   lines.push(
@@ -296,6 +332,27 @@ export function buildMarkdownReport(data: ReportData): string {
       "de hallazgos de abajo es la fuente de verdad.",
   );
   lines.push("");
+
+  // --- Interfaz --------------------------------------------------------
+  if (data.uiLog.length > 0) {
+    const fallidas = data.uiLog.filter((e) => !e.ok).length;
+    lines.push("## Recorrido por la interfaz");
+    lines.push("");
+    lines.push(
+      `El agente operó la aplicación en un navegador real: **${data.uiLog.length} acciones**` +
+        (fallidas > 0 ? `, de las cuales **${fallidas} fallaron**.` : ", todas exitosas.") +
+        " Las capturas de cada paso están en el reporte HTML.",
+    );
+    lines.push("");
+    lines.push("| # | Acción | Sobre | Detalle | |");
+    lines.push("|---|---|---|---|---|");
+    data.uiLog.forEach((entry, i) => {
+      lines.push(
+        `| ${i + 1} | ${entry.action} | ${entry.target ?? "—"} | ${entry.detail ?? "—"} | ${entry.ok ? "✅" : `❌ ${entry.error ?? ""}`} |`,
+      );
+    });
+    lines.push("");
+  }
 
   // --- Hallazgos -------------------------------------------------------
   if (data.findings.length === 0) {

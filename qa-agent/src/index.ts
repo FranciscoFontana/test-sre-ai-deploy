@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AgentError, listAvailableModels, runAgent } from "./agent.js";
+import { BrowserSession } from "./browser.js";
 import { buildInitialUserMessage, buildSystemInstruction } from "./prompt.js";
 import { buildHtmlReport } from "./html.js";
 import {
@@ -13,6 +14,7 @@ import {
 } from "./report.js";
 import { QaSession, SEVERITIES, type Severity } from "./session.js";
 import { buildTools } from "./tools.js";
+import { buildUiTools } from "./ui-tools.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(HERE, "..", "..");
@@ -65,7 +67,7 @@ const config = {
   // Medido: el agente hace el trabajo útil en las primeras 5 iteraciones y
   // después se queda girando, una request por turno, sin converger. Como cada
   // iteración reenvía todo el historial, las de más cuestan cuota y no aportan.
-  maxIterations: Number(process.env.QA_MAX_ITERATIONS ?? 12),
+  maxIterations: Number(process.env.QA_MAX_ITERATIONS ?? 22),
   maxRequests: Number(process.env.QA_MAX_REQUESTS ?? 80),
   // Gemini 3.x razona antes de responder y ese pensamiento consume presupuesto
   // de salida. Con un tope bajo el modelo se queda sin margen justo antes de
@@ -113,7 +115,8 @@ async function main(): Promise<void> {
   await waitForTarget(config.baseUrl);
 
   const session = new QaSession(config.baseUrl, config.maxRequests);
-  const tools = buildTools(session);
+  const browser = new BrowserSession(session);
+  const tools = [...buildTools(session), ...buildUiTools(browser)];
 
   const startedAt = new Date();
   const startedMs = performance.now();
@@ -158,6 +161,9 @@ async function main(): Promise<void> {
       fail(error.message);
     }
     fail(error instanceof Error ? error.message : String(error));
+  } finally {
+    // Sin esto Chromium queda vivo y el proceso nunca termina.
+    await browser.close();
   }
 
   if (result.neededClosingNudge) {
@@ -199,7 +205,8 @@ async function main(): Promise<void> {
   );
   console.log(
     `[qa-agent] cobertura del contrato · ${data.coverage.covered}/${data.coverage.total} casos · ` +
-      `${data.checks.length} chequeos · ${session.requestCount} requests`,
+      `${data.checks.length} chequeos · ${session.requestCount} requests · ` +
+      `${session.uiLog.length} acciones de UI`,
   );
   console.log(`[qa-agent] reportes: ${mdPath}`);
   console.log(`[qa-agent]           ${jsonPath}`);

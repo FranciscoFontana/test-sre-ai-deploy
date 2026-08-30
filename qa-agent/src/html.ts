@@ -89,6 +89,15 @@ summary{cursor:pointer;font-size:.88rem;font-weight:500}
 .note{color:var(--muted);font-size:.8rem;margin-top:.6rem}
 footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--line);
 color:var(--muted);font-size:.78rem}
+.shots{display:grid;grid-template-columns:repeat(auto-fill,minmax(20rem,1fr));gap:1rem}
+.shot{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--card)}
+.shot img{display:block;width:100%;height:auto;border-bottom:1px solid var(--line)}
+.shot .cap{padding:.6rem .8rem}
+.shot .cap .step{font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.shot .cap .what{font-size:.87rem;margin-top:.15rem;overflow-wrap:anywhere}
+.shot.ko{border-color:var(--bad)}
+.uitl{font-size:.85rem}
+.uitl td:first-child{color:var(--muted);white-space:nowrap}
 `;
 
 export function buildHtmlReport(data: ReportData): string {
@@ -123,6 +132,7 @@ export function buildHtmlReport(data: ReportData): string {
   const tarjetas: [string, string][] = [
     ["Chequeos", String(checks.length)],
     ["Requests HTTP", String(data.requestLog.length)],
+    ["Acciones de UI", String(data.uiLog.length)],
     ["Cobertura", `${coverage.covered}/${coverage.total}`],
     ["Hallazgos", String(data.findings.length)],
     ["Iteraciones", `${meta.iterations}/${meta.maxIterations}`],
@@ -170,20 +180,68 @@ export function buildHtmlReport(data: ReportData): string {
 
   // Chequeos
   h.push("<h2>Qué probó el agente</h2>");
-  h.push('<div class="wrap"><table><tr><th></th><th>Chequeo</th><th>Requests</th><th>Resultados</th></tr>');
+  h.push(
+    '<div class="wrap"><table><tr><th></th><th>Chequeo</th><th>Superficie</th><th>Evidencia</th></tr>',
+  );
   for (const c of checks) {
     const marca = c.failed ? '<span class="fail">❌</span>' : '<span class="pass">✅</span>';
-    const badges = c.entries
-      .map((e) => `<span class="badge ${statusClass(e.status)}">${statusText(e)}</span>`)
-      .join(" ");
+    const superficies: string[] = [];
+    if (c.entries.length > 0) superficies.push(`API ${c.entries.length}`);
+    if (c.uiEntries.length > 0) superficies.push(`UI ${c.uiEntries.length}`);
+    const badges = [
+      ...c.entries.map((e) => `<span class="badge ${statusClass(e.status)}">${statusText(e)}</span>`),
+      ...c.uiEntries.map(
+        (e) => `<span class="badge ${e.ok ? "s2" : "err"}">${esc(e.action)}</span>`,
+      ),
+    ].join(" ");
     h.push(
-      `<tr><td>${marca}</td><td>${esc(c.purpose)}</td><td>${c.entries.length}</td><td>${badges}</td></tr>`,
+      `<tr><td>${marca}</td><td>${esc(c.purpose)}</td><td>${esc(superficies.join(" + "))}</td><td>${badges}</td></tr>`,
     );
   }
   h.push("</table></div>");
   h.push(
     '<p class="note">El texto de cada chequeo lo escribió el agente antes de ejecutar la request. La marca ❌ se deriva de que un hallazgo apunte al mismo endpoint; la lista de hallazgos es la fuente de verdad.</p>',
   );
+
+  // Recorrido por la interfaz
+  if (data.uiLog.length > 0) {
+    const fallidas = data.uiLog.filter((e) => !e.ok).length;
+    h.push("<h2>Recorrido por la interfaz</h2>");
+    h.push(
+      `<p class="sub">El agente operó la aplicación en un navegador real: <strong>${data.uiLog.length} acciones</strong>` +
+        (fallidas > 0
+          ? `, de las cuales <strong class="fail">${fallidas} fallaron</strong>.`
+          : ", todas exitosas.") +
+        " Cada captura es el estado de la pantalla justo después de la acción.</p>",
+    );
+
+    h.push('<div class="wrap"><table class="uitl"><tr><th>#</th><th>Acción</th><th>Sobre</th><th>Detalle</th><th></th></tr>');
+    data.uiLog.forEach((e, i) => {
+      h.push(
+        `<tr><td>${i + 1}</td><td><code>${esc(e.action)}</code></td><td>${esc(e.target ?? "—")}</td><td>${esc(e.detail ?? "—")}</td><td>${e.ok ? '<span class="pass">✅</span>' : `<span class="fail">❌ ${esc(e.error ?? "")}</span>`}</td></tr>`,
+      );
+    });
+    h.push("</table></div>");
+
+    const conCaptura = data.uiLog
+      .map((e, i) => ({ e, i }))
+      .filter(({ e }) => e.screenshot !== undefined);
+    if (conCaptura.length > 0) {
+      h.push('<div class="shots" style="margin-top:1.2rem">');
+      for (const { e, i } of conCaptura) {
+        h.push(`<figure class="shot ${e.ok ? "" : "ko"}" style="margin:0">`);
+        // Sin loading="lazy": la imagen ya está embebida en el documento, así que
+        // no hay descarga que diferir, y con lazy no se decodifica al imprimir
+        // a PDF ni al ver el reporte de un vistazo.
+        h.push(`<img src="${esc(e.screenshot)}" alt="Paso ${i + 1}: ${esc(e.purpose ?? e.action)}">`);
+        h.push('<figcaption class="cap">');
+        h.push(`<div class="step">paso ${i + 1} · ${esc(e.action)}${e.ok ? "" : " · falló"}</div>`);
+        h.push(`<div class="what">${esc(e.purpose ?? "")}</div>`);
+        h.push("</figcaption></figure>");
+      }
+      h.push("</div>");
+    }
+  }
 
   // Hallazgos
   h.push("<h2>Hallazgos</h2>");

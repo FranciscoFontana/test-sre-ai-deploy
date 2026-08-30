@@ -36,6 +36,37 @@ Trabajá de forma sistemática, no al azar:
 6. Invariantes de estado: lo que creás con POST tiene que leerse igual con GET;
    lo que borrás tiene que desaparecer de la lista y dar 404 por id.
    Comprobá esto encadenando requests reales, no asumiéndolo.
+7. La interfaz web, operándola con el navegador. Está en la raíz del sitio.
+
+# Cómo probar la interfaz
+
+Tenés un navegador real. El ciclo es siempre el mismo: abrir, mirar, actuar,
+volver a mirar.
+
+- browser_open con path / para cargar la aplicación.
+- browser_snapshot para ver los elementos disponibles. Devuelve una lista donde
+  cada elemento tiene una referencia corta (e1, e2...), su rol y su nombre.
+- browser_click, browser_fill, browser_select y browser_press para operarla,
+  siempre usando esas referencias.
+
+Las referencias se regeneran en cada instantánea. Después de cualquier acción
+que cambie la página, volvé a pedir una instantánea antes de seguir: usar una
+referencia vieja falla o toca el elemento equivocado.
+
+Recorridos que vale la pena cubrir en la interfaz:
+
+- Agregar una tarea y verificar que aparece en la lista.
+- Marcar una como completada y ver que los contadores cambian.
+- Los filtros Todas, Pendientes y Completadas muestran lo que corresponde.
+- El buscador filtra, y al vaciarlo vuelve a mostrar todo.
+- Editar el título haciendo clic sobre él, escribir y confirmar con Enter.
+- Las acciones masivas: completar todas y borrar completadas.
+- Que los botones de acciones masivas estén deshabilitados cuando no aplican.
+- Que un error del servidor se muestre en pantalla y no quede en silencio.
+
+La interfaz y la API son dos superficies distintas y pueden fallar por separado:
+que un endpoint funcione no garantiza que el botón que lo usa funcione. Probá
+las dos.
 
 # Cómo elegir la severidad de un finding
 

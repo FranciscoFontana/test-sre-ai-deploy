@@ -67,6 +67,12 @@ jobs:
         working-directory: app
         run: npm ci
 
+      # Los tests de interfaz usan un Chromium real. La descarga queda cacheada
+      # en el perfil del usuario, asi que solo la primera corrida la paga.
+      - name: Instalar Chromium para los tests de interfaz
+        working-directory: app
+        run: npx playwright install chromium
+
       - name: Typecheck
         working-directory: app
         run: npm run typecheck
@@ -132,6 +138,11 @@ jobs:
         working-directory: qa-agent
         run: npm ci
 
+      # El agente opera la interfaz en un navegador real, ademas de la API.
+      - name: Instalar Chromium para el agente
+        working-directory: qa-agent
+        run: npx playwright install chromium
+
       - name: Ejecutar el agente de QA contra el entorno QA
         id: qa
         working-directory: qa-agent
@@ -140,7 +151,7 @@ jobs:
           QA_BASE_URL: ${{ env.QA_BASE_URL }}
           QA_OUT_DIR: ${{ github.workspace }}
           QA_FAIL_ON: high
-          QA_MAX_ITERATIONS: "12"
+          QA_MAX_ITERATIONS: "22"
         run: npm run qa
 
       - name: Publicar el reporte en el resumen del job

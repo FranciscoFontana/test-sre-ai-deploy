@@ -1,8 +1,17 @@
 import { Router } from "express";
 import { sendError } from "../errors.js";
-import { PRIORITIES, type Priority, type TodoStore } from "../store.js";
+import {
+  PRIORITIES,
+  SORT_FIELDS,
+  SORT_ORDERS,
+  type Priority,
+  type SortField,
+  type SortOrder,
+  type TodoStore,
+} from "../store.js";
 
 const MAX_TITLE_LENGTH = 200;
+const MAX_SEARCH_LENGTH = 100;
 
 function isPriority(value: unknown): value is Priority {
   return typeof value === "string" && (PRIORITIES as readonly string[]).includes(value);
@@ -29,7 +38,51 @@ export function todosRouter(store: TodoStore): Router {
         "El parámetro 'done' sólo acepta 'true' o 'false'.",
       );
     }
-    res.json({ items: store.list(done) });
+
+    const rawSearch = req.query.q;
+    if (rawSearch !== undefined && typeof rawSearch !== "string") {
+      return sendError(res, 400, "VALIDATION_ERROR", "El parámetro 'q' debe ser un texto simple.");
+    }
+    if (typeof rawSearch === "string" && rawSearch.length > MAX_SEARCH_LENGTH) {
+      return sendError(
+        res,
+        400,
+        "VALIDATION_ERROR",
+        `El parámetro 'q' no puede superar los ${MAX_SEARCH_LENGTH} caracteres.`,
+      );
+    }
+
+    const rawSort = req.query.sort;
+    if (rawSort !== undefined && !(SORT_FIELDS as readonly unknown[]).includes(rawSort)) {
+      return sendError(
+        res,
+        400,
+        "VALIDATION_ERROR",
+        `El parámetro 'sort' debe ser uno de: ${SORT_FIELDS.join(", ")}.`,
+      );
+    }
+
+    const rawOrder = req.query.order;
+    if (rawOrder !== undefined && !(SORT_ORDERS as readonly unknown[]).includes(rawOrder)) {
+      return sendError(
+        res,
+        400,
+        "VALIDATION_ERROR",
+        `El parámetro 'order' debe ser uno de: ${SORT_ORDERS.join(", ")}.`,
+      );
+    }
+
+    res.json({
+      items: store.list({
+        ...(done !== undefined ? { done } : {}),
+        ...(typeof rawSearch === "string" ? { search: rawSearch } : {}),
+        ...(rawSort !== undefined ? { sort: rawSort as SortField } : {}),
+        ...(rawOrder !== undefined ? { order: rawOrder as SortOrder } : {}),
+      }),
+      // Los contadores son sobre el total, no sobre lo filtrado: sirven para
+      // el encabezado de la UI, que muestra cuánto queda pendiente en general.
+      counts: store.counts(),
+    });
   });
 
   router.post("/", (req, res) => {
@@ -70,6 +123,24 @@ export function todosRouter(store: TodoStore): Router {
 
     const todo = store.create({ title, ...(priority !== undefined ? { priority } : {}) });
     res.status(201).json(todo);
+  });
+
+  // ---------------------------------------------------------------------
+  // Las rutas de acciones masivas van ANTES que las de /:id.
+  //
+  // Express matchea en orden de registro: si /:id se declarara primero,
+  // DELETE /api/todos/completed intentaría borrar una tarea cuyo id fuese
+  // literalmente "completed" y devolvería 404 en vez de vaciar la lista.
+  // ---------------------------------------------------------------------
+
+  router.post("/complete-all", (_req, res) => {
+    const updated = store.completeAll();
+    res.json({ updated, counts: store.counts() });
+  });
+
+  router.delete("/completed", (_req, res) => {
+    const deleted = store.removeCompleted();
+    res.json({ deleted, counts: store.counts() });
   });
 
   router.get("/:id", (req, res) => {

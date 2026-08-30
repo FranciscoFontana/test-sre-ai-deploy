@@ -3,12 +3,32 @@ import { randomUUID } from "node:crypto";
 export const PRIORITIES = ["low", "med", "high"] as const;
 export type Priority = (typeof PRIORITIES)[number];
 
+export const SORT_FIELDS = ["createdAt", "title", "priority"] as const;
+export type SortField = (typeof SORT_FIELDS)[number];
+
+export const SORT_ORDERS = ["asc", "desc"] as const;
+export type SortOrder = (typeof SORT_ORDERS)[number];
+
 export interface Todo {
   id: string;
   title: string;
   done: boolean;
   priority: Priority;
   createdAt: string;
+}
+
+/** Cuántas tareas hay en total, sin importar los filtros aplicados. */
+export interface TodoCounts {
+  total: number;
+  pending: number;
+  done: number;
+}
+
+export interface ListQuery {
+  done?: boolean;
+  search?: string;
+  sort?: SortField;
+  order?: SortOrder;
 }
 
 /**
@@ -19,7 +39,7 @@ export interface Todo {
  * No se exponen por la API — si el agente pudiera leer qué bug está activo
  * no estaría explorando, estaría copiándose.
  */
-export const SEED_BUGS = ["none", "empty-title", "delete-404"] as const;
+export const SEED_BUGS = ["none", "empty-title", "delete-404", "search-ignores-case"] as const;
 export type SeedBug = (typeof SEED_BUGS)[number];
 
 export function readSeedBug(raw: string | undefined): SeedBug {
@@ -29,6 +49,9 @@ export function readSeedBug(raw: string | undefined): SeedBug {
     : "none";
 }
 
+/** high pesa más que med, que pesa más que low. */
+const PRIORITY_WEIGHT: Record<Priority, number> = { high: 3, med: 2, low: 1 };
+
 export class TodoStore {
   readonly seedBug: SeedBug;
   #todos = new Map<string, Todo>();
@@ -37,10 +60,47 @@ export class TodoStore {
     this.seedBug = seedBug;
   }
 
-  list(done?: boolean): Todo[] {
+  counts(): TodoCounts {
     const all = [...this.#todos.values()];
-    const filtered = done === undefined ? all : all.filter((t) => t.done === done);
-    return filtered.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    const done = all.filter((t) => t.done).length;
+    return { total: all.length, pending: all.length - done, done };
+  }
+
+  list(query: ListQuery = {}): Todo[] {
+    let items = [...this.#todos.values()];
+
+    if (query.done !== undefined) {
+      items = items.filter((t) => t.done === query.done);
+    }
+
+    if (query.search !== undefined && query.search.trim().length > 0) {
+      const needle = query.search.trim();
+      // BUG SEMBRADO 'search-ignores-case': la búsqueda pasa a distinguir
+      // mayúsculas de minúsculas, así que buscar "pan" no encuentra "Pan".
+      items =
+        this.seedBug === "search-ignores-case"
+          ? items.filter((t) => t.title.includes(needle))
+          : items.filter((t) => t.title.toLowerCase().includes(needle.toLowerCase()));
+    }
+
+    const field = query.sort ?? "createdAt";
+    const direction = query.order === "desc" ? -1 : 1;
+    items.sort((a, b) => {
+      let comparison: number;
+      if (field === "priority") {
+        comparison = PRIORITY_WEIGHT[a.priority] - PRIORITY_WEIGHT[b.priority];
+      } else if (field === "title") {
+        comparison = a.title.localeCompare(b.title, "es", { sensitivity: "base" });
+      } else {
+        comparison = a.createdAt.localeCompare(b.createdAt);
+      }
+      // Desempate estable por id: sin esto, dos tareas con la misma prioridad
+      // pueden salir en distinto orden entre llamadas y el agente lo reporta
+      // como inconsistencia.
+      return comparison !== 0 ? comparison * direction : a.id.localeCompare(b.id);
+    });
+
+    return items;
   }
 
   get(id: string): Todo | undefined {
@@ -77,6 +137,30 @@ export class TodoStore {
 
   remove(id: string): boolean {
     return this.#todos.delete(id);
+  }
+
+  /** Marca como completadas todas las pendientes. Devuelve cuántas cambió. */
+  completeAll(): number {
+    let updated = 0;
+    for (const [id, todo] of this.#todos) {
+      if (!todo.done) {
+        this.#todos.set(id, { ...todo, done: true });
+        updated += 1;
+      }
+    }
+    return updated;
+  }
+
+  /** Elimina las completadas. Devuelve cuántas borró. */
+  removeCompleted(): number {
+    let deleted = 0;
+    for (const [id, todo] of this.#todos) {
+      if (todo.done) {
+        this.#todos.delete(id);
+        deleted += 1;
+      }
+    }
+    return deleted;
   }
 
   reset(): void {

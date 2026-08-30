@@ -5,62 +5,164 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Todo App</title>
 <style>
-  :root { color-scheme: light dark; --bg:#fff; --fg:#16161d; --muted:#6b6b76; --line:#e4e4e9; --accent:#3b5bdb; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#16161d; --fg:#eceff4; --muted:#9a9aa6; --line:#2c2c36; --accent:#748ffc; } }
+  :root {
+    color-scheme: light dark;
+    --bg:#f6f7f9; --panel:#fff; --fg:#16161d; --muted:#6b6b76; --line:#e4e4e9;
+    --accent:#3b5bdb; --accent-fg:#fff; --danger:#e03131; --ok:#2b8a3e;
+    --shadow:0 1px 2px rgba(0,0,0,.05), 0 4px 16px rgba(0,0,0,.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#111117; --panel:#1a1a22; --fg:#eceff4; --muted:#9a9aa6; --line:#2c2c36;
+      --accent:#748ffc; --accent-fg:#10101a; --danger:#ff6b6b; --ok:#51cf66;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25);
+    }
+  }
   * { box-sizing: border-box; }
-  body { margin:0; padding:2rem 1rem; background:var(--bg); color:var(--fg);
-         font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif; }
-  main { max-width: 34rem; margin: 0 auto; }
-  h1 { font-size:1.4rem; margin:0 0 .25rem; }
-  .sub { color:var(--muted); font-size:.85rem; margin:0 0 1.5rem; }
-  form { display:flex; gap:.5rem; margin-bottom:1.25rem; }
-  input, select, button { font:inherit; padding:.5rem .7rem; border:1px solid var(--line);
-                          border-radius:6px; background:var(--bg); color:var(--fg); }
-  input { flex:1; min-width:0; }
-  button { background:var(--accent); color:#fff; border-color:transparent; cursor:pointer; }
-  button:hover { filter:brightness(1.1); }
+  body {
+    margin:0; padding:2.5rem 1rem 4rem; background:var(--bg); color:var(--fg);
+    font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  main { max-width:40rem; margin:0 auto; }
+  header { margin-bottom:1.5rem; }
+  h1 { font-size:1.6rem; margin:0 0 .2rem; letter-spacing:-.02em; }
+  .sub { color:var(--muted); font-size:.85rem; margin:0; }
+
+  .panel {
+    background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    box-shadow:var(--shadow); padding:1.1rem; margin-bottom:1rem;
+  }
+
+  input, select, button, textarea { font:inherit; color:inherit; }
+  input, select {
+    padding:.55rem .7rem; border:1px solid var(--line); border-radius:8px;
+    background:var(--bg); min-width:0;
+  }
+  input:focus-visible, select:focus-visible, button:focus-visible {
+    outline:2px solid var(--accent); outline-offset:1px;
+  }
+  button { border-radius:8px; cursor:pointer; border:1px solid var(--line); background:var(--bg); padding:.55rem .9rem; }
+  button:hover:not(:disabled) { border-color:var(--accent); }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  button.primary { background:var(--accent); color:var(--accent-fg); border-color:transparent; font-weight:600; }
+  button.primary:hover:not(:disabled) { filter:brightness(1.08); }
+
+  #new-todo { display:flex; gap:.5rem; }
+  #new-todo input { flex:1; }
+
+  .toolbar { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; }
+  .toolbar input[type="search"] { flex:1; min-width:8rem; }
+
+  .tabs { display:flex; gap:.3rem; }
+  .tab {
+    padding:.4rem .8rem; font-size:.87rem; border-radius:999px;
+    border:1px solid transparent; background:transparent; color:var(--muted);
+  }
+  .tab[aria-selected="true"] { background:var(--accent); color:var(--accent-fg); font-weight:600; }
+  .tab:hover:not([aria-selected="true"]) { background:var(--bg); color:var(--fg); }
+
+  .counts { display:flex; gap:1.2rem; font-size:.82rem; color:var(--muted); margin-left:auto; }
+  .counts b { color:var(--fg); font-variant-numeric:tabular-nums; }
+
   ul { list-style:none; padding:0; margin:0; }
-  li { display:flex; align-items:center; gap:.6rem; padding:.6rem 0; border-bottom:1px solid var(--line); }
-  li .title { flex:1; min-width:0; overflow-wrap:anywhere; }
-  li.done .title { text-decoration:line-through; color:var(--muted); }
-  .pri { font-size:.7rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted);
-         border:1px solid var(--line); border-radius:4px; padding:.1rem .35rem; }
-  .del { background:none; color:var(--muted); border:none; cursor:pointer; padding:.2rem .4rem; }
-  .del:hover { color:#e03131; }
-  .empty, .err { color:var(--muted); font-size:.9rem; padding:1rem 0; }
-  .err { color:#e03131; }
-  footer { margin-top:2rem; color:var(--muted); font-size:.75rem; }
+  li.todo {
+    display:flex; align-items:center; gap:.7rem; padding:.7rem .2rem;
+    border-bottom:1px solid var(--line);
+  }
+  li.todo:last-child { border-bottom:none; }
+  li.todo .title {
+    flex:1; min-width:0; overflow-wrap:anywhere; cursor:text;
+    padding:.15rem .3rem; border-radius:5px; border:1px solid transparent;
+  }
+  li.todo .title:hover { border-color:var(--line); }
+  li.todo.done .title { text-decoration:line-through; color:var(--muted); }
+  li.todo .edit { flex:1; }
+  .pri {
+    font-size:.68rem; text-transform:uppercase; letter-spacing:.05em;
+    border:1px solid var(--line); border-radius:5px; padding:.1rem .4rem; color:var(--muted);
+  }
+  .pri.high { color:var(--danger); border-color:currentColor; }
+  .pri.low { opacity:.7; }
+  .del { border:none; background:none; color:var(--muted); padding:.25rem .45rem; }
+  .del:hover { color:var(--danger); }
+
+  .bulk { display:flex; gap:.5rem; flex-wrap:wrap; }
+  .empty, .error { font-size:.9rem; padding:1.5rem 0; text-align:center; color:var(--muted); }
+  .error { color:var(--danger); text-align:left; padding:.7rem .9rem; border:1px solid currentColor; border-radius:8px; }
+  footer { margin-top:1.5rem; color:var(--muted); font-size:.75rem; text-align:center; }
 </style>
 </head>
 <body>
 <main>
-  <h1>Todo App</h1>
-  <p class="sub">App de prueba para el pipeline de deploy con QA por IA.</p>
+  <header>
+    <h1>Todo App</h1>
+    <p class="sub">Aplicación de prueba del pipeline de deploy con QA por IA.</p>
+  </header>
 
-  <form id="new-todo">
-    <input id="title" placeholder="Nueva tarea..." autocomplete="off" required />
-    <select id="priority">
-      <option value="low">Baja</option>
-      <option value="med" selected>Media</option>
-      <option value="high">Alta</option>
-    </select>
-    <button type="submit">Agregar</button>
-  </form>
+  <div class="panel">
+    <form id="new-todo" data-testid="new-todo-form" autocomplete="off">
+      <label class="visually-hidden" for="title" hidden>Nueva tarea</label>
+      <input id="title" data-testid="new-todo-title" placeholder="¿Qué hay que hacer?" aria-label="Nueva tarea" required />
+      <select id="priority" data-testid="new-todo-priority" aria-label="Prioridad">
+        <option value="low">Baja</option>
+        <option value="med" selected>Media</option>
+        <option value="high">Alta</option>
+      </select>
+      <button type="submit" class="primary" data-testid="new-todo-submit">Agregar</button>
+    </form>
+  </div>
 
-  <div id="error" class="err" hidden></div>
-  <ul id="list"></ul>
-  <p id="empty" class="empty" hidden>No hay tareas todavía.</p>
+  <div class="panel">
+    <div class="toolbar">
+      <input type="search" id="search" data-testid="search-input" placeholder="Buscar..." aria-label="Buscar tareas" />
+      <select id="sort" data-testid="sort-select" aria-label="Ordenar por">
+        <option value="createdAt">Más antiguas</option>
+        <option value="createdAt:desc">Más nuevas</option>
+        <option value="title">Título A-Z</option>
+        <option value="priority:desc">Prioridad</option>
+      </select>
+    </div>
+    <div class="toolbar" style="margin-top:.7rem">
+      <div class="tabs" role="tablist" aria-label="Filtrar tareas">
+        <button class="tab" role="tab" data-testid="filter-all" data-filter="all" aria-selected="true">Todas</button>
+        <button class="tab" role="tab" data-testid="filter-pending" data-filter="pending" aria-selected="false">Pendientes</button>
+        <button class="tab" role="tab" data-testid="filter-done" data-filter="done" aria-selected="false">Completadas</button>
+      </div>
+      <div class="counts">
+        <span>total <b data-testid="count-total">0</b></span>
+        <span>pendientes <b data-testid="count-pending">0</b></span>
+        <span>hechas <b data-testid="count-done">0</b></span>
+      </div>
+    </div>
+  </div>
 
-  <footer id="version"></footer>
+  <div id="error" class="error" data-testid="error-box" hidden></div>
+
+  <div class="panel">
+    <ul id="list" data-testid="todo-list"></ul>
+    <p id="empty" class="empty" data-testid="empty-state" hidden>No hay tareas para mostrar.</p>
+  </div>
+
+  <div class="panel bulk">
+    <button data-testid="complete-all">Completar todas</button>
+    <button data-testid="clear-completed">Borrar completadas</button>
+  </div>
+
+  <footer data-testid="version"></footer>
 </main>
 
 <script type="module">
-const list = document.getElementById("list");
-const empty = document.getElementById("empty");
-const errorBox = document.getElementById("error");
+const $ = (sel) => document.querySelector(sel);
+const byTest = (id) => document.querySelector(`[data-testid="${id}"]`);
+
+const list = $("#list");
+const empty = byTest("empty-state");
+const errorBox = byTest("error-box");
+
+const state = { filter: "all", search: "", sort: "createdAt", order: "asc" };
 
 function showError(message) {
-  errorBox.textContent = message;
+  errorBox.textContent = message ?? "";
   errorBox.hidden = !message;
 }
 
@@ -68,83 +170,141 @@ async function api(path, options) {
   const res = await fetch(path, options);
   if (res.status === 204) return null;
   const body = await res.json().catch(() => null);
-  if (!res.ok) {
-    throw new Error(body?.error?.message ?? `Error ${res.status}`);
-  }
+  if (!res.ok) throw new Error(body?.error?.message ?? `Error ${res.status}`);
   return body;
 }
 
-function render(items) {
-  list.replaceChildren();
-  empty.hidden = items.length > 0;
+function buildQuery() {
+  const params = new URLSearchParams();
+  if (state.filter === "pending") params.set("done", "false");
+  if (state.filter === "done") params.set("done", "true");
+  if (state.search.trim()) params.set("q", state.search.trim());
+  params.set("sort", state.sort);
+  params.set("order", state.order);
+  return params.toString();
+}
 
-  for (const todo of items) {
-    const li = document.createElement("li");
-    li.className = todo.done ? "done" : "";
+function renderCounts(counts) {
+  byTest("count-total").textContent = counts.total;
+  byTest("count-pending").textContent = counts.pending;
+  byTest("count-done").textContent = counts.done;
+  byTest("complete-all").disabled = counts.pending === 0;
+  byTest("clear-completed").disabled = counts.done === 0;
+}
 
-    const check = document.createElement("input");
-    check.type = "checkbox";
-    check.checked = todo.done;
-    check.addEventListener("change", () => toggle(todo, check.checked));
+function startEditing(todo, titleEl) {
+  const input = document.createElement("input");
+  input.className = "edit";
+  input.value = todo.title;
+  input.setAttribute("data-testid", "todo-edit-input");
+  input.setAttribute("aria-label", `Editar ${todo.title}`);
+  titleEl.replaceWith(input);
+  input.focus();
+  input.select();
 
-    const title = document.createElement("span");
-    title.className = "title";
-    title.textContent = todo.title;
+  let settled = false;
+  const commit = async () => {
+    if (settled) return;
+    settled = true;
+    const value = input.value;
+    if (value.trim() === todo.title.trim() || value.trim() === "") {
+      await load();
+      return;
+    }
+    try {
+      showError("");
+      await api(`/api/todos/${todo.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: value }),
+      });
+      await load();
+    } catch (err) {
+      showError(err.message);
+      await load();
+    }
+  };
 
-    const pri = document.createElement("span");
-    pri.className = "pri";
-    pri.textContent = todo.priority;
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") commit();
+    if (event.key === "Escape") { settled = true; load(); }
+  });
+  input.addEventListener("blur", commit);
+}
 
-    const del = document.createElement("button");
-    del.className = "del";
-    del.type = "button";
-    del.textContent = "✕";
-    del.setAttribute("aria-label", `Eliminar ${todo.title}`);
-    del.addEventListener("click", () => remove(todo));
+function renderItem(todo) {
+  const li = document.createElement("li");
+  li.className = todo.done ? "todo done" : "todo";
+  li.setAttribute("data-testid", "todo-item");
+  li.dataset.id = todo.id;
 
-    li.append(check, title, pri, del);
-    list.append(li);
-  }
+  const check = document.createElement("input");
+  check.type = "checkbox";
+  check.checked = todo.done;
+  check.setAttribute("data-testid", "todo-checkbox");
+  check.setAttribute("aria-label", `Completar ${todo.title}`);
+  check.addEventListener("change", () => patch(todo.id, { done: check.checked }));
+
+  const title = document.createElement("span");
+  title.className = "title";
+  title.setAttribute("data-testid", "todo-title");
+  title.setAttribute("title", "Clic para editar");
+  title.textContent = todo.title;
+  title.addEventListener("click", () => startEditing(todo, title));
+
+  const pri = document.createElement("span");
+  pri.className = `pri ${todo.priority}`;
+  pri.setAttribute("data-testid", "todo-priority");
+  pri.textContent = todo.priority;
+
+  const del = document.createElement("button");
+  del.className = "del";
+  del.type = "button";
+  del.textContent = "✕";
+  del.setAttribute("data-testid", "todo-delete");
+  del.setAttribute("aria-label", `Eliminar ${todo.title}`);
+  del.addEventListener("click", () => remove(todo.id));
+
+  li.append(check, title, pri, del);
+  return li;
 }
 
 async function load() {
   try {
     showError("");
-    const data = await api("/api/todos");
-    render(data.items);
+    const data = await api(`/api/todos?${buildQuery()}`);
+    list.replaceChildren(...data.items.map(renderItem));
+    empty.hidden = data.items.length > 0;
+    renderCounts(data.counts);
   } catch (err) {
     showError(err.message);
   }
 }
 
-async function toggle(todo, done) {
+async function patch(id, patchBody) {
   try {
     showError("");
-    await api(`/api/todos/${todo.id}`, {
+    await api(`/api/todos/${id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ done }),
+      body: JSON.stringify(patchBody),
     });
     await load();
-  } catch (err) {
-    showError(err.message);
-  }
+  } catch (err) { showError(err.message); await load(); }
 }
 
-async function remove(todo) {
+async function remove(id) {
   try {
     showError("");
-    await api(`/api/todos/${todo.id}`, { method: "DELETE" });
+    await api(`/api/todos/${id}`, { method: "DELETE" });
     await load();
-  } catch (err) {
-    showError(err.message);
-  }
+  } catch (err) { showError(err.message); await load(); }
 }
 
-document.getElementById("new-todo").addEventListener("submit", async (event) => {
+byTest("new-todo-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const titleInput = document.getElementById("title");
-  const priorityInput = document.getElementById("priority");
+  const titleInput = byTest("new-todo-title");
+  const priorityInput = byTest("new-todo-priority");
   try {
     showError("");
     await api("/api/todos", {
@@ -154,15 +314,51 @@ document.getElementById("new-todo").addEventListener("submit", async (event) => 
     });
     titleInput.value = "";
     await load();
-  } catch (err) {
-    showError(err.message);
-  }
+  } catch (err) { showError(err.message); }
+});
+
+let searchTimer;
+byTest("search-input").addEventListener("input", (event) => {
+  state.search = event.target.value;
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(load, 180);
+});
+
+byTest("sort-select").addEventListener("change", (event) => {
+  const [sort, order] = event.target.value.split(":");
+  state.sort = sort;
+  state.order = order ?? "asc";
+  load();
+});
+
+for (const tab of document.querySelectorAll(".tab")) {
+  tab.addEventListener("click", () => {
+    for (const other of document.querySelectorAll(".tab")) {
+      other.setAttribute("aria-selected", String(other === tab));
+    }
+    state.filter = tab.dataset.filter;
+    load();
+  });
+}
+
+byTest("complete-all").addEventListener("click", async () => {
+  try {
+    showError("");
+    await api("/api/todos/complete-all", { method: "POST" });
+    await load();
+  } catch (err) { showError(err.message); }
+});
+
+byTest("clear-completed").addEventListener("click", async () => {
+  try {
+    showError("");
+    await api("/api/todos/completed", { method: "DELETE" });
+    await load();
+  } catch (err) { showError(err.message); }
 });
 
 api("/version")
-  .then((v) => {
-    document.getElementById("version").textContent = `v${v.version} · ${v.gitSha}`;
-  })
+  .then((v) => { byTest("version").textContent = `v${v.version} · ${v.gitSha}`; })
   .catch(() => {});
 
 load();

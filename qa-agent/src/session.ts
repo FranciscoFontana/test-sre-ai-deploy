@@ -19,6 +19,22 @@ export interface Finding {
   reproduction: string;
 }
 
+/** Acciones del agente sobre la interfaz, en orden. */
+export interface UiActionEntry {
+  action: "open" | "snapshot" | "click" | "fill" | "press";
+  /** Qué estaba verificando, igual que en las requests HTTP. */
+  purpose?: string;
+  /** Sobre qué elemento actuó, tal como se lo describió al modelo. */
+  target?: string;
+  /** Dato extra segun la accion: la url abierta, el texto tipeado, la tecla. */
+  detail?: string;
+  ok: boolean;
+  error?: string;
+  /** Captura de pantalla como data URI JPEG, si se tomó. */
+  screenshot?: string;
+  ms: number;
+}
+
 export interface RunOutcome {
   verdict: "pass" | "fail";
   summary: string;
@@ -61,6 +77,7 @@ export class QaSession {
   readonly maxRequests: number;
   readonly findings: Finding[] = [];
   readonly requestLog: RequestLogEntry[] = [];
+  readonly uiLog: UiActionEntry[] = [];
   outcome: RunOutcome | null = null;
 
   constructor(baseUrl: string, maxRequests = 80) {

@@ -38,8 +38,8 @@ haciendo requests reales, y devuelve un veredicto que bloquea o habilita el depl
 
 | Carpeta | Qué es |
 |---|---|
-| `app/` | API REST de tareas en Node + TypeScript. El sujeto de prueba. |
-| `qa-agent/` | El agente de QA: usa Gemini con function calling para probar la API. |
+| `app/` | App de tareas en Node + TypeScript: API REST y una interfaz con filtros, búsqueda, orden, edición en línea y acciones masivas. |
+| `qa-agent/` | El agente de QA: usa Gemini con function calling para probar la API y la interfaz. |
 | `contracts/openapi.yaml` | El contrato. Fuente de verdad para el agente. |
 | `docker/` | Dockerfile multi-stage y los composes de QA y producción. |
 | `scripts/` | Deploy, rollback, smoke test, espera de health, limpieza de imágenes. |
@@ -70,6 +70,34 @@ no saber si algo funciona no es lo mismo que saber que funciona.
 
 Una corrida que termina sin llamar a `finish_run` — porque agotó el tope de
 iteraciones — también cuenta como fallo por cobertura incompleta.
+
+## Qué prueba el agente
+
+Dos superficies distintas, porque fallan por separado: que un endpoint
+funcione no garantiza que el botón que lo llama funcione.
+
+**La API**, con requests HTTP directas contra el contrato OpenAPI.
+
+**La interfaz**, operándola en un Chromium real. El agente tiene herramientas
+para abrir la página, mirarla, clickear, escribir, elegir de un desplegable y
+apretar teclas. La pieza clave es cómo se le describe la página: no se le manda
+el HTML —serían decenas de miles de tokens y lo ahogaría— sino una lista
+compacta de los elementos con los que puede interactuar, cada uno con una
+referencia corta que después usa para actuar:
+
+```
+[e3] button   "Agregar"        (new-todo-submit)
+[e7] checkbox "Completar pan"  (todo-checkbox)
+[e8] text     "Comprar pan"    (todo-title)
+```
+
+Cada acción sobre la interfaz queda registrada con una captura de pantalla del
+estado resultante, y todas van al reporte HTML.
+
+Debajo de esa exploración hay una red determinística: 45 tests que corren en el
+job de build, de los cuales 10 manejan la interfaz con Playwright. Cubren los
+recorridos que tienen que funcionar siempre; el agente busca lo que nadie
+anticipó.
 
 ## Qué deja cada corrida
 
