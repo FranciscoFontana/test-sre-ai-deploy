@@ -106,7 +106,7 @@ jobs:
         env:
           # Cambiá esto a empty-title o delete-404 para comprobar
           # que el gate frena el deploy de verdad. Volvelo a none después.
-          SEED_BUG: empty-title
+          SEED_BUG: none
         run: bash scripts/deploy.sh qa "${IMAGE_TAG}"
 
   # ---------------------------------------------------------------------
