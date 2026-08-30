@@ -7,6 +7,11 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Permite relanzar el pipeline a mano, sin tener que inventar un commit:
+  #   gh workflow run "CI/CD con gate de QA por IA" --ref main
+  # Util cuando lo que fallo fue el entorno y no el codigo, por ejemplo un
+  # secret mal cargado o la cuota del modelo agotada.
+  workflow_dispatch:
 
 permissions:
   contents: read
