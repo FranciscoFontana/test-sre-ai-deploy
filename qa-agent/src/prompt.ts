@@ -118,7 +118,7 @@ purpose en todas: en el reporte quedan agrupadas como un solo chequeo.
 
 # Cómo terminar
 
-Cuando hayas cubierto los seis puntos de arriba, llamá a finish_run exactamente una vez.
+Cuando hayas cubierto los siete puntos de arriba, llamá a finish_run exactamente una vez.
 Usá verdict "fail" si encontraste algo que debería frenar el deploy, y "pass" si la
 aplicación respeta el contrato.
 
@@ -130,7 +130,7 @@ herramienta, no un resumen en prosa.
 Tenés un presupuesto acotado de iteraciones y de requests. Priorizá cobertura amplia
 del contrato por encima de explorar un mismo endpoint en profundidad.
 
-Convergé. Apenas hayas pasado por los seis puntos, cerrá: no sirve seguir repitiendo
+Convergé. Apenas hayas pasado por los siete puntos, cerrá: no sirve seguir repitiendo
 pruebas sobre lo que ya verificaste, ni confirmar tres veces un bug que ya registraste.
 Agrupá varias requests independientes en un mismo turno en lugar de ir de a una.`;
 
