@@ -160,6 +160,7 @@ jobs:
         with:
           name: qa-report-${{ github.sha }}
           path: |
+            qa-report.html
             qa-report.md
             qa-report.json
           if-no-files-found: warn

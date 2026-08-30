@@ -2,6 +2,8 @@ import { SEVERITIES, type QaSession, type Severity } from "./session.js";
 
 /** Techo de caracteres del cuerpo de respuesta que se le devuelve al modelo. */
 const MAX_BODY_CHARS = 2000;
+/** Techo de la evidencia que se guarda en el reporte: no hace falta tanto. */
+const MAX_EVIDENCE_CHARS = 400;
 const REQUEST_TIMEOUT_MS = 10_000;
 
 const HTTP_METHODS = ["GET", "POST", "PATCH", "PUT", "DELETE", "HEAD", "OPTIONS"];
@@ -21,9 +23,9 @@ export interface QaTool {
   run: (args: Record<string, unknown>) => Promise<string>;
 }
 
-function truncate(text: string): string {
-  if (text.length <= MAX_BODY_CHARS) return text;
-  return `${text.slice(0, MAX_BODY_CHARS)}\n...[truncado, ${text.length} caracteres en total]`;
+function truncate(text: string, max = MAX_BODY_CHARS): string {
+  if (text.length <= max) return text;
+  return `${text.slice(0, max)}...[truncado, ${text.length} caracteres en total]`;
 }
 
 function asString(value: unknown): string | undefined {
@@ -71,6 +73,8 @@ export function buildTools(session: QaSession): QaTool[] {
     name: "http_request",
     description: [
       "Ejecuta una request HTTP contra la aplicación bajo prueba y devuelve la respuesta.",
+      "El campo purpose es obligatorio: escribí en una línea qué estás verificando.",
+      "Va al reporte y es lo que permite mostrar qué se probó y con qué resultado.",
       "Sólo se indica el path (por ejemplo /api/todos): el host es fijo y no se puede cambiar.",
       "El campo body es un STRING crudo, no un objeto: mandá JSON ya serializado.",
       "Eso te permite probar a propósito cuerpos malformados, por ejemplo un JSON sin cerrar.",
@@ -83,6 +87,11 @@ export function buildTools(session: QaSession): QaTool[] {
       type: "object",
       properties: {
         method: { type: "string", enum: HTTP_METHODS, description: "Método HTTP." },
+        purpose: {
+          type: "string",
+          description:
+            "Qué estás verificando con esta request, en una línea. Ej: rechazar título vacío.",
+        },
         path: {
           type: "string",
           description:
@@ -98,7 +107,7 @@ export function buildTools(session: QaSession): QaTool[] {
             "Headers extra. Si mandás body y no especificás content-type, se asume application/json.",
         },
       },
-      required: ["method", "path"],
+      required: ["method", "path", "purpose"],
     },
     run: async (args) => {
       if (session.requestCount >= session.maxRequests) {
@@ -121,6 +130,7 @@ export function buildTools(session: QaSession): QaTool[] {
         });
       }
 
+      const purpose = asString(args.purpose);
       const rawBody = asString(args.body);
       const body = rawBody === undefined ? undefined : expandPadding(rawBody);
       const headers = asStringRecord(args.headers);
@@ -146,7 +156,14 @@ export function buildTools(session: QaSession): QaTool[] {
           path,
           status: response.status,
           latencyMs,
-          ...(body !== undefined ? { bodyBytes: Buffer.byteLength(body) } : {}),
+          ...(purpose !== undefined ? { purpose } : {}),
+          ...(body !== undefined
+            ? {
+                bodyBytes: Buffer.byteLength(body),
+                requestBody: truncate(body, MAX_EVIDENCE_CHARS),
+              }
+            : {}),
+          responseBody: truncate(text, MAX_EVIDENCE_CHARS),
         });
 
         return JSON.stringify({
@@ -167,7 +184,13 @@ export function buildTools(session: QaSession): QaTool[] {
           path,
           status: null,
           latencyMs,
-          ...(body !== undefined ? { bodyBytes: Buffer.byteLength(body) } : {}),
+          ...(purpose !== undefined ? { purpose } : {}),
+          ...(body !== undefined
+            ? {
+                bodyBytes: Buffer.byteLength(body),
+                requestBody: truncate(body, MAX_EVIDENCE_CHARS),
+              }
+            : {}),
           error: message,
         });
         return JSON.stringify({

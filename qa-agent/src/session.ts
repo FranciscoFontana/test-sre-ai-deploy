@@ -30,12 +30,24 @@ export interface RequestLogEntry {
   status: number | null;
   latencyMs: number;
   /**
+   * Que estaba verificando el agente con esta request, en sus palabras.
+   *
+   * Es lo que convierte un log de trafico en un log de pruebas: sin esto se
+   * ve que hizo un POST que dio 400, pero no si ese 400 era el resultado
+   * buscado o una sorpresa.
+   */
+  purpose?: string;
+  /**
    * Tamano en bytes del cuerpo enviado, ya expandido el marcador {{PAD:n}}.
    * Sin este dato, diagnosticar un finding sobre limites de tamano obliga a
    * adivinar que mando el modelo: el reporte dice "mas de 100kb" y no hay
    * forma de comprobar si era cierto.
    */
   bodyBytes?: number;
+  /** Cuerpo enviado, truncado. Evidencia para auditar el reporte. */
+  requestBody?: string;
+  /** Cuerpo recibido, truncado. Evidencia para auditar el reporte. */
+  responseBody?: string;
   error?: string;
 }
 

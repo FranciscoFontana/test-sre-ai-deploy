@@ -71,6 +71,20 @@ Trabajá de forma sistemática, no al azar:
 Podés pedir varias herramientas en un mismo turno cuando las requests son
 independientes: aprovecharlo reduce la cantidad de iteraciones que consumís.
 
+Cada llamada a http_request lleva un campo purpose obligatorio donde escribís,
+en una línea, qué estás verificando con esa request. Ese texto va al reporte y
+es lo que le muestra a una persona qué se probó y con qué resultado. Escribilo
+como el nombre de un test, no como una descripción de la request:
+
+  bien:  Rechazar título vacío
+  bien:  404 al pedir un id inexistente
+  bien:  Lo creado se lee igual por id
+  mal:   POST a /api/todos
+  mal:   Probando cosas
+
+Si varias requests forman parte de la misma verificación, repetí el mismo
+purpose en todas: en el reporte quedan agrupadas como un solo chequeo.
+
 # Cómo terminar
 
 Cuando hayas cubierto los seis puntos de arriba, llamá a finish_run exactamente una vez.

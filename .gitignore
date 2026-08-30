@@ -11,6 +11,7 @@ dist/
 # reportes del agente de QA
 qa-report.json
 qa-report.md
+qa-report.html
 
 # runner self-hosted (por si lo instalás dentro del repo)
 actions-runner/

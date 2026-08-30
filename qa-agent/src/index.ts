@@ -3,7 +3,14 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AgentError, listAvailableModels, runAgent } from "./agent.js";
 import { buildInitialUserMessage, buildSystemInstruction } from "./prompt.js";
-import { buildJsonReport, buildMarkdownReport, decideGate, type RunMeta } from "./report.js";
+import { buildHtmlReport } from "./html.js";
+import {
+  buildJsonReport,
+  buildMarkdownReport,
+  buildReportData,
+  decideGate,
+  type RunMeta,
+} from "./report.js";
 import { QaSession, SEVERITIES, type Severity } from "./session.js";
 import { buildTools } from "./tools.js";
 
@@ -177,19 +184,26 @@ async function main(): Promise<void> {
   };
 
   const gate = decideGate(session, config.failOn, hitIterationCap);
-  const markdown = buildMarkdownReport(session, meta, gate);
-  const json = buildJsonReport(session, meta, gate);
+  const data = buildReportData(session, meta, gate, openapiYaml);
 
   const mdPath = resolve(config.outDir, "qa-report.md");
   const jsonPath = resolve(config.outDir, "qa-report.json");
-  writeFileSync(mdPath, markdown, "utf8");
-  writeFileSync(jsonPath, JSON.stringify(json, null, 2), "utf8");
+  const htmlPath = resolve(config.outDir, "qa-report.html");
+  writeFileSync(mdPath, buildMarkdownReport(data), "utf8");
+  writeFileSync(jsonPath, JSON.stringify(buildJsonReport(data), null, 2), "utf8");
+  writeFileSync(htmlPath, buildHtmlReport(data), "utf8");
 
   console.log(
     `[qa-agent] tokens · prompt=${result.usage.promptTokens} ` +
       `respuesta=${result.usage.responseTokens} total=${result.usage.totalTokens}`,
   );
-  console.log(`[qa-agent] reportes escritos en ${mdPath} y ${jsonPath}`);
+  console.log(
+    `[qa-agent] cobertura del contrato · ${data.coverage.covered}/${data.coverage.total} casos · ` +
+      `${data.checks.length} chequeos · ${session.requestCount} requests`,
+  );
+  console.log(`[qa-agent] reportes: ${mdPath}`);
+  console.log(`[qa-agent]           ${jsonPath}`);
+  console.log(`[qa-agent]           ${htmlPath}`);
 
   const counts = session.countsBySeverity();
   console.log(

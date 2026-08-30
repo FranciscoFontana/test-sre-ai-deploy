@@ -71,6 +71,38 @@ no saber si algo funciona no es lo mismo que saber que funciona.
 Una corrida que termina sin llamar a `finish_run` — porque agotó el tope de
 iteraciones — también cuenta como fallo por cobertura incompleta.
 
+## Qué deja cada corrida
+
+El agente escribe tres archivos, que el pipeline sube como artifact del job:
+
+| Archivo | Para qué |
+|---|---|
+| `qa-report.html` | El presentable. Se abre en el navegador: veredicto, cobertura, chequeos y evidencia. |
+| `qa-report.md` | El que se comenta en el PR y va al resumen del job. |
+| `qa-report.json` | El estructurado, para consumir desde otra herramienta. |
+
+Los tres tienen cuatro secciones:
+
+**Cobertura del contrato.** Se enumeran todos los casos que documenta el
+OpenAPI —cada combinación de método, ruta y código de respuesta— y se cruzan
+contra las requests que el agente ejecutó. Esta parte **no depende de lo que el
+agente diga**: se calcula del log, así que no puede exagerar su propia
+cobertura. Muestra también las requests fuera de contrato, que suelen ser
+exploración legítima.
+
+**Qué probó el agente.** Cada request lleva un campo `purpose` obligatorio
+donde el agente declara qué está verificando, escrito como el nombre de un
+test. Las requests se agrupan por esa intención y forman la lista de chequeos.
+El ❌ de un chequeo se deriva de que un hallazgo apunte al mismo endpoint; la
+lista de hallazgos sigue siendo la fuente de verdad.
+
+**Hallazgos.** Cada bug con su gravedad, lo que exige el contrato, lo que
+devolvió la aplicación y cómo reproducirlo.
+
+**Evidencia.** Todas las requests con el cuerpo enviado y el recibido,
+truncados. Es lo que permite auditar cualquier afirmación de las secciones
+anteriores en vez de creerle al agente.
+
 ## Costo
 
 El agente corre con **Gemini 3.5 Flash Lite en la capa gratuita** de Google AI Studio:

@@ -10,7 +10,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@google/genai": "^2.19.0"
+    "@google/genai": "^2.19.0",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
