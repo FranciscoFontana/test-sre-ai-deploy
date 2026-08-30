@@ -186,7 +186,13 @@ jobs:
     name: Deploy a producción
     runs-on: [self-hosted, windows]
     needs: ai-qa
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    # Despliega desde main, tanto por push como por disparo manual. El manual
+    # tiene que estar incluido: es un acto deliberado de alguien con permisos de
+    # escritura, y es la unica forma de reintentar un deploy cuando lo que fallo
+    # fue el entorno. Los pull_request quedan afuera, que era el objetivo.
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     steps:
       # cmd y no powershell: la política de ejecución de este equipo está en
       # Restricted y bloquea todo .ps1, que es como Actions corre los pasos de
