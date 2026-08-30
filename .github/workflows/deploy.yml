@@ -105,8 +105,8 @@ jobs:
       - name: Levantar el entorno de QA
         env:
           # Cambiá esto a empty-title o delete-404 para comprobar
-          # que el gate frena el deploy de verdad.
-          SEED_BUG: none
+          # que el gate frena el deploy de verdad. Volvelo a none después.
+          SEED_BUG: empty-title
         run: bash scripts/deploy.sh qa "${IMAGE_TAG}"
 
   # ---------------------------------------------------------------------
