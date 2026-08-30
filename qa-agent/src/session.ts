@@ -29,6 +29,13 @@ export interface RequestLogEntry {
   path: string;
   status: number | null;
   latencyMs: number;
+  /**
+   * Tamano en bytes del cuerpo enviado, ya expandido el marcador {{PAD:n}}.
+   * Sin este dato, diagnosticar un finding sobre limites de tamano obliga a
+   * adivinar que mando el modelo: el reporte dice "mas de 100kb" y no hay
+   * forma de comprobar si era cierto.
+   */
+  bodyBytes?: number;
   error?: string;
 }
 

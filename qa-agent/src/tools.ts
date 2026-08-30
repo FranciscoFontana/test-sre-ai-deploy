@@ -141,18 +141,35 @@ export function buildTools(session: QaSession): QaTool[] {
         const latencyMs = Math.round(performance.now() - startedAt);
         const text = await response.text();
 
-        session.requestLog.push({ method, path, status: response.status, latencyMs });
+        session.requestLog.push({
+          method,
+          path,
+          status: response.status,
+          latencyMs,
+          ...(body !== undefined ? { bodyBytes: Buffer.byteLength(body) } : {}),
+        });
 
         return JSON.stringify({
           status: response.status,
           contentType: response.headers.get("content-type"),
           latencyMs,
+          // Se informa el tamano ya expandido: si el modelo uso {{PAD:n}} no
+          // tiene otra forma de saber cuantos bytes salieron de verdad, y sin
+          // ese dato no puede juzgar si probo el limite que queria probar.
+          ...(body !== undefined ? { sentBodyBytes: Buffer.byteLength(body) } : {}),
           body: truncate(text),
         });
       } catch (error) {
         const latencyMs = Math.round(performance.now() - startedAt);
         const message = error instanceof Error ? error.message : String(error);
-        session.requestLog.push({ method, path, status: null, latencyMs, error: message });
+        session.requestLog.push({
+          method,
+          path,
+          status: null,
+          latencyMs,
+          ...(body !== undefined ? { bodyBytes: Buffer.byteLength(body) } : {}),
+          error: message,
+        });
         return JSON.stringify({
           status: null,
           latencyMs,

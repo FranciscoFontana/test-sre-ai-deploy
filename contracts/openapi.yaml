@@ -124,7 +124,14 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "413":
-          description: El cuerpo supera el límite de 100kb
+          description: >-
+            El cuerpo supera el límite de tamaño, que es de exactamente
+            102400 bytes (100 KiB). Este control ocurre ANTES que cualquier
+            validación de campos: un cuerpo de 102400 bytes o más devuelve 413
+            sin mirar su contenido, y uno más chico pasa a validarse campo por
+            campo. Para probarlo hace falta superar 102400 bytes, no 100000:
+            un cuerpo de 100000 bytes queda por debajo del umbral y devuelve
+            400 por la longitud de title, que no es lo mismo.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
