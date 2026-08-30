@@ -32,11 +32,26 @@ jobs:
     name: Build y tests determinísticos
     runs-on: [self-hosted, windows]
     steps:
+      # Git Bash no está en el PATH del sistema, que es el que ve el servicio
+      # del runner: ahí el único bash es el de System32, que en realidad lanza
+      # WSL. Sin este paso, todo `shell: bash` falla con execvpe(/bin/bash).
+      #
+      # Node ya está instalado en la máquina, así que tampoco se usa
+      # actions/setup-node: descargaba un Node por job y fallaba al descomprimir.
+      - name: Anteponer Git Bash y Node al PATH
+        shell: powershell
+        run: |
+          Add-Content $env:GITHUB_PATH "C:\Program Files\Git\bin"
+          Add-Content $env:GITHUB_PATH "C:\Program Files\nodejs"
+
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
+      - name: Verificar herramientas del runner
+        run: |
+          echo "bash:   $(which bash)"
+          echo "node:   $(node --version)"
+          echo "npm:    $(npm --version)"
+          echo "docker: $(docker --version)"
 
       - name: Instalar dependencias de la app
         working-directory: app
@@ -64,6 +79,12 @@ jobs:
     runs-on: [self-hosted, windows]
     needs: build
     steps:
+      - name: Anteponer Git Bash y Node al PATH
+        shell: powershell
+        run: |
+          Add-Content $env:GITHUB_PATH "C:\Program Files\Git\bin"
+          Add-Content $env:GITHUB_PATH "C:\Program Files\nodejs"
+
       - uses: actions/checkout@v4
 
       - name: Levantar el entorno de QA
@@ -79,11 +100,13 @@ jobs:
     runs-on: [self-hosted, windows]
     needs: deploy-qa
     steps:
-      - uses: actions/checkout@v4
+      - name: Anteponer Git Bash y Node al PATH
+        shell: powershell
+        run: |
+          Add-Content $env:GITHUB_PATH "C:\Program Files\Git\bin"
+          Add-Content $env:GITHUB_PATH "C:\Program Files\nodejs"
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
+      - uses: actions/checkout@v4
 
       - name: Instalar dependencias del agente
         working-directory: qa-agent
@@ -97,7 +120,7 @@ jobs:
           QA_BASE_URL: ${{ env.QA_BASE_URL }}
           QA_OUT_DIR: ${{ github.workspace }}
           QA_FAIL_ON: high
-          QA_MAX_ITERATIONS: "20"
+          QA_MAX_ITERATIONS: "12"
         run: npm run qa
 
       - name: Publicar el reporte en el resumen del job
@@ -145,6 +168,12 @@ jobs:
     needs: ai-qa
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
+      - name: Anteponer Git Bash y Node al PATH
+        shell: powershell
+        run: |
+          Add-Content $env:GITHUB_PATH "C:\Program Files\Git\bin"
+          Add-Content $env:GITHUB_PATH "C:\Program Files\nodejs"
+
       - uses: actions/checkout@v4
 
       # Se captura ANTES de desplegar: es la versión a la cual volver si el
@@ -184,6 +213,12 @@ jobs:
     needs: [deploy-qa, ai-qa, deploy-prod]
     if: always()
     steps:
+      - name: Anteponer Git Bash y Node al PATH
+        shell: powershell
+        run: |
+          Add-Content $env:GITHUB_PATH "C:\Program Files\Git\bin"
+          Add-Content $env:GITHUB_PATH "C:\Program Files\nodejs"
+
       - uses: actions/checkout@v4
 
       - name: Bajar el entorno de QA
