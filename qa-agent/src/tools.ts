@@ -30,6 +30,26 @@ function asString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
+/** Techo del relleno, para que un {{PAD:...}} enorme no se coma la memoria. */
+const MAX_PAD_CHARS = 2_000_000;
+
+/**
+ * Expande {{PAD:n}} a n caracteres dentro del cuerpo de la request.
+ *
+ * Existe porque el modelo no puede escribir un cuerpo de 100kb: tendría que
+ * emitir cien mil caracteres dentro de los argumentos de la llamada, muy por
+ * encima de su presupuesto de salida. Sin esto, al intentar probar el límite
+ * de tamaño que exige el contrato mandaba un cuerpo truncado, recibía
+ * MALFORMED_JSON y reportaba como bug lo que era una limitación de la
+ * herramienta.
+ */
+function expandPadding(body: string): string {
+  return body.replace(/\{\{PAD:(\d+)\}\}/g, (_match, digits: string) => {
+    const size = Math.min(Number(digits), MAX_PAD_CHARS);
+    return "A".repeat(size);
+  });
+}
+
 function asStringRecord(value: unknown): Record<string, string> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return {};
   const out: Record<string, string> = {};
@@ -54,6 +74,10 @@ export function buildTools(session: QaSession): QaTool[] {
       "Sólo se indica el path (por ejemplo /api/todos): el host es fijo y no se puede cambiar.",
       "El campo body es un STRING crudo, no un objeto: mandá JSON ya serializado.",
       "Eso te permite probar a propósito cuerpos malformados, por ejemplo un JSON sin cerrar.",
+      "Para probar límites de tamaño usá el marcador {{PAD:n}} dentro del body:",
+      'se reemplaza por n caracteres antes de enviar. Por ejemplo {"title":"{{PAD:150000}}"}',
+      "manda un cuerpo de más de 100kb. Escribir vos mismo un cuerpo tan grande es imposible,",
+      "así que sin este marcador no podés probar el límite de tamaño.",
     ].join(" "),
     inputSchema: {
       type: "object",
@@ -97,7 +121,8 @@ export function buildTools(session: QaSession): QaTool[] {
         });
       }
 
-      const body = asString(args.body);
+      const rawBody = asString(args.body);
+      const body = rawBody === undefined ? undefined : expandPadding(rawBody);
       const headers = asStringRecord(args.headers);
       const hasContentType = Object.keys(headers).some((h) => h.toLowerCase() === "content-type");
       if (body !== undefined && !hasContentType) {

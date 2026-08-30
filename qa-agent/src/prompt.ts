@@ -28,8 +28,11 @@ Trabajá de forma sistemática, no al azar:
 3. Códigos de status. Prestá especial atención a la diferencia entre 404 y 2xx sobre
    recursos inexistentes, y entre 400 y 5xx ante entradas inválidas.
 4. Forma de los errores: todos deben seguir el esquema Error del contrato. Nunca HTML.
-5. Casos borde: ids inexistentes, JSON malformado, cuerpos muy grandes, unicode,
-   rutas bajo /api que no existen.
+5. Casos borde: ids inexistentes, JSON malformado, unicode, rutas bajo /api que
+   no existen, y cuerpos que superen el limite de tamano. Para este ultimo usa el
+   marcador {{PAD:n}} dentro del body de http_request: escribir vos mismo cien mil
+   caracteres es imposible, y mandar un cuerpo truncado da MALFORMED_JSON, que no
+   es lo que estas probando.
 6. Invariantes de estado: lo que creás con POST tiene que leerse igual con GET;
    lo que borrás tiene que desaparecer de la lista y dar 404 por id.
    Comprobá esto encadenando requests reales, no asumiéndolo.
