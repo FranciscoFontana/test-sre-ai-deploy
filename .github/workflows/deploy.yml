@@ -38,11 +38,16 @@ jobs:
       #
       # Node ya está instalado en la máquina, así que tampoco se usa
       # actions/setup-node: descargaba un Node por job y fallaba al descomprimir.
+      # cmd y no powershell: la política de ejecución de este equipo está en
+      # Restricted y bloquea todo .ps1, que es como Actions corre los pasos de
+      # powershell. cmd no tiene esa restricción y no hay que debilitar una
+      # configuración de seguridad para que ande el pipeline.
+      # La redirección va adelante para que no se cuelen espacios al final.
       - name: Anteponer Git Bash y Node al PATH
-        shell: powershell
+        shell: cmd
         run: |
-          Add-Content $env:GITHUB_PATH "C:\Program Files\Git\bin"
-          Add-Content $env:GITHUB_PATH "C:\Program Files\nodejs"
+          >>"%GITHUB_PATH%" echo C:\Program Files\Git\bin
+          >>"%GITHUB_PATH%" echo C:\Program Files\nodejs
 
       - uses: actions/checkout@v4
 
@@ -79,11 +84,16 @@ jobs:
     runs-on: [self-hosted, windows]
     needs: build
     steps:
+      # cmd y no powershell: la política de ejecución de este equipo está en
+      # Restricted y bloquea todo .ps1, que es como Actions corre los pasos de
+      # powershell. cmd no tiene esa restricción y no hay que debilitar una
+      # configuración de seguridad para que ande el pipeline.
+      # La redirección va adelante para que no se cuelen espacios al final.
       - name: Anteponer Git Bash y Node al PATH
-        shell: powershell
+        shell: cmd
         run: |
-          Add-Content $env:GITHUB_PATH "C:\Program Files\Git\bin"
-          Add-Content $env:GITHUB_PATH "C:\Program Files\nodejs"
+          >>"%GITHUB_PATH%" echo C:\Program Files\Git\bin
+          >>"%GITHUB_PATH%" echo C:\Program Files\nodejs
 
       - uses: actions/checkout@v4
 
@@ -100,11 +110,16 @@ jobs:
     runs-on: [self-hosted, windows]
     needs: deploy-qa
     steps:
+      # cmd y no powershell: la política de ejecución de este equipo está en
+      # Restricted y bloquea todo .ps1, que es como Actions corre los pasos de
+      # powershell. cmd no tiene esa restricción y no hay que debilitar una
+      # configuración de seguridad para que ande el pipeline.
+      # La redirección va adelante para que no se cuelen espacios al final.
       - name: Anteponer Git Bash y Node al PATH
-        shell: powershell
+        shell: cmd
         run: |
-          Add-Content $env:GITHUB_PATH "C:\Program Files\Git\bin"
-          Add-Content $env:GITHUB_PATH "C:\Program Files\nodejs"
+          >>"%GITHUB_PATH%" echo C:\Program Files\Git\bin
+          >>"%GITHUB_PATH%" echo C:\Program Files\nodejs
 
       - uses: actions/checkout@v4
 
@@ -168,11 +183,16 @@ jobs:
     needs: ai-qa
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
+      # cmd y no powershell: la política de ejecución de este equipo está en
+      # Restricted y bloquea todo .ps1, que es como Actions corre los pasos de
+      # powershell. cmd no tiene esa restricción y no hay que debilitar una
+      # configuración de seguridad para que ande el pipeline.
+      # La redirección va adelante para que no se cuelen espacios al final.
       - name: Anteponer Git Bash y Node al PATH
-        shell: powershell
+        shell: cmd
         run: |
-          Add-Content $env:GITHUB_PATH "C:\Program Files\Git\bin"
-          Add-Content $env:GITHUB_PATH "C:\Program Files\nodejs"
+          >>"%GITHUB_PATH%" echo C:\Program Files\Git\bin
+          >>"%GITHUB_PATH%" echo C:\Program Files\nodejs
 
       - uses: actions/checkout@v4
 
@@ -213,11 +233,16 @@ jobs:
     needs: [deploy-qa, ai-qa, deploy-prod]
     if: always()
     steps:
+      # cmd y no powershell: la política de ejecución de este equipo está en
+      # Restricted y bloquea todo .ps1, que es como Actions corre los pasos de
+      # powershell. cmd no tiene esa restricción y no hay que debilitar una
+      # configuración de seguridad para que ande el pipeline.
+      # La redirección va adelante para que no se cuelen espacios al final.
       - name: Anteponer Git Bash y Node al PATH
-        shell: powershell
+        shell: cmd
         run: |
-          Add-Content $env:GITHUB_PATH "C:\Program Files\Git\bin"
-          Add-Content $env:GITHUB_PATH "C:\Program Files\nodejs"
+          >>"%GITHUB_PATH%" echo C:\Program Files\Git\bin
+          >>"%GITHUB_PATH%" echo C:\Program Files\nodejs
 
       - uses: actions/checkout@v4
 
