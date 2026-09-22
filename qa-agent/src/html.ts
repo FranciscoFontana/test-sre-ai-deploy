@@ -35,9 +35,9 @@ function statusText(entry: RequestLogEntry): string {
 
 const STYLE = `
 :root{--bg:#fff;--fg:#16161d;--muted:#6b6b76;--line:#e4e4e9;--card:#fafafa;
---ok:#2b8a3e;--bad:#c92a2a;--accent:#3b5bdb;}
+--ok:#2b8a3e;--bad:#c92a2a;--warn:#b35c00;--accent:#3b5bdb;}
 @media (prefers-color-scheme:dark){:root{--bg:#16161d;--fg:#eceff4;--muted:#9a9aa6;
---line:#2c2c36;--card:#1d1d26;--ok:#51cf66;--bad:#ff6b6b;--accent:#748ffc;}}
+--line:#2c2c36;--card:#1d1d26;--ok:#51cf66;--bad:#ff6b6b;--warn:#ffa94d;--accent:#748ffc;}}
 *{box-sizing:border-box}
 body{margin:0;padding:2rem 1rem;background:var(--bg);color:var(--fg);
 font:15px/1.6 system-ui,-apple-system,Segoe UI,sans-serif}
@@ -51,6 +51,9 @@ margin-bottom:1.5rem;border:1px solid}
 border-color:var(--ok);color:var(--ok)}
 .verdict.bad{background:color-mix(in srgb,var(--bad) 12%,transparent);
 border-color:var(--bad);color:var(--bad)}
+.verdict.warn{background:color-mix(in srgb,var(--warn) 12%,transparent);
+border-color:var(--warn);color:var(--warn)}
+.verdict .note{margin:.5rem 0 0;font-weight:400;font-size:.9rem;color:var(--fg)}
 .verdict ul{margin:.6rem 0 0;padding-left:1.2rem;font-weight:400;font-size:.9rem;color:var(--fg)}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:.7rem}
 .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:.7rem .85rem}
@@ -121,6 +124,15 @@ export function buildHtmlReport(data: ReportData): string {
     h.push('<div class="verdict ok">✅ GATE APROBADO — el deploy puede continuar');
     if (data.outcome) h.push(`<ul><li>${esc(data.outcome.summary)}</li></ul>`);
     h.push("</div>");
+  } else if (gate.exitCode === 2) {
+    h.push('<div class="verdict warn">⚠️ GATE NO EJECUTADO — la corrida se interrumpió');
+    h.push(
+      '<p class="note">El deploy se detiene porque no se llegó a verificar la aplicación, ' +
+        "no porque se haya encontrado un problema. Lo que sigue es lo que el agente alcanzó " +
+        "a hacer antes del corte.</p><ul>",
+    );
+    for (const r of gate.reasons) h.push(`<li>${esc(r)}</li>`);
+    h.push("</ul></div>");
   } else {
     h.push('<div class="verdict bad">❌ GATE BLOQUEADO — el deploy se detiene<ul>');
     for (const r of gate.reasons) h.push(`<li>${esc(r)}</li>`);

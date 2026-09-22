@@ -19,10 +19,16 @@ export interface RunMeta {
   maxIterations: number;
   hitIterationCap: boolean;
   failOn: Severity;
+  /** Presente sólo si la corrida se interrumpió antes de terminar. */
+  abortReason?: string;
 }
 
+/**
+ * 0 = QA aprobado · 1 = QA rechazó el build · 2 = la corrida no pudo completarse.
+ * El 2 no dice que la app esté mal: dice que no se sabe.
+ */
 export interface GateDecision {
-  exitCode: 0 | 1;
+  exitCode: 0 | 1 | 2;
   passed: boolean;
   reasons: string[];
 }
@@ -98,6 +104,32 @@ export function decideGate(
 
   const passed = reasons.length === 0;
   return { exitCode: passed ? 0 : 1, passed, reasons };
+}
+
+/**
+ * El gate de una corrida que se interrumpió antes de terminar.
+ *
+ * Nunca aprueba: no saber si la app está bien no es lo mismo que saber que lo
+ * está. Pero tampoco dice que esté mal. Lo que el agente alcanzó a registrar se
+ * informa como parcial, para que quien lea el reporte sepa qué se probó y qué
+ * encontró hasta el corte, en vez de quedarse sin nada.
+ */
+export function abortedGate(session: QaSession, failOn: Severity, reason: string): GateDecision {
+  const reasons = [`La corrida se interrumpió antes de terminar: ${reason}`];
+
+  const blocking = session.findingsAtOrAbove(failOn);
+  if (blocking.length > 0) {
+    reasons.push(
+      `Hasta el corte ya había ${blocking.length} finding(s) con gravedad ${failOn} o superior: ` +
+        blocking.map((f) => f.title).join("; "),
+    );
+  }
+  reasons.push(
+    `Resultado parcial: ${session.requestCount} requests y ${session.findings.length} finding(s) ` +
+      "registrados antes de la interrupción. La cobertura quedó incompleta.",
+  );
+
+  return { exitCode: 2, passed: false, reasons };
 }
 
 /** Saca el método y la ruta de un endpoint escrito por el modelo. */
@@ -244,10 +276,24 @@ export function buildMarkdownReport(data: ReportData): string {
 
   lines.push("# Reporte de QA automatizado");
   lines.push("");
-  lines.push(gate.passed ? "## ✅ GATE APROBADO" : "## ❌ GATE BLOQUEADO");
+  lines.push(
+    gate.passed
+      ? "## ✅ GATE APROBADO"
+      : gate.exitCode === 2
+        ? "## ⚠️ GATE NO EJECUTADO — corrida incompleta"
+        : "## ❌ GATE BLOQUEADO",
+  );
   lines.push("");
 
-  if (!gate.passed) {
+  if (gate.exitCode === 2) {
+    lines.push(
+      "El deploy a producción se detiene porque la corrida no pudo completarse. " +
+        "Esto **no** significa que la aplicación tenga un problema: significa que no se llegó a verificar.",
+    );
+    lines.push("");
+    for (const reason of gate.reasons) lines.push(`- ${reason}`);
+    lines.push("");
+  } else if (!gate.passed) {
     lines.push("El deploy a producción se detiene por:");
     lines.push("");
     for (const reason of gate.reasons) lines.push(`- ${reason}`);

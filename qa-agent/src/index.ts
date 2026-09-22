@@ -6,10 +6,12 @@ import { BrowserSession } from "./browser.js";
 import { buildInitialUserMessage, buildSystemInstruction } from "./prompt.js";
 import { buildHtmlReport } from "./html.js";
 import {
+  abortedGate,
   buildJsonReport,
   buildMarkdownReport,
   buildReportData,
   decideGate,
+  type GateDecision,
   type RunMeta,
 } from "./report.js";
 import { QaSession, SEVERITIES, type Severity } from "./session.js";
@@ -73,10 +75,32 @@ const config = {
   // de salida. Con un tope bajo el modelo se queda sin margen justo antes de
   // emitir la llamada de cierre y devuelve una respuesta vacía.
   maxOutputTokens: Number(process.env.QA_MAX_OUTPUT_TOKENS ?? 16384),
+  // Medido con Gemini degradado: llamadas legítimas de hasta 90 s. Por encima
+  // de 120 s se asume que la llamada quedó colgada, se aborta y se reintenta.
+  requestTimeoutMs: Number(process.env.QA_REQUEST_TIMEOUT_MS ?? 120_000),
   failOn: parseSeverity(readArg("--fail-on") ?? process.env.QA_FAIL_ON, "high"),
   outDir: readArg("--out-dir") ?? process.env.QA_OUT_DIR ?? process.cwd(),
   contractPath: process.env.QA_CONTRACT_PATH ?? join(REPO_ROOT, "contracts", "openapi.yaml"),
 };
+
+/** Escribe los tres reportes. Se usa tanto al terminar como al abortar. */
+function writeReports(
+  session: QaSession,
+  meta: RunMeta,
+  gate: GateDecision,
+  openapiYaml: string,
+) {
+  const data = buildReportData(session, meta, gate, openapiYaml);
+  const paths = {
+    md: resolve(config.outDir, "qa-report.md"),
+    json: resolve(config.outDir, "qa-report.json"),
+    html: resolve(config.outDir, "qa-report.html"),
+  };
+  writeFileSync(paths.md, buildMarkdownReport(data), "utf8");
+  writeFileSync(paths.json, JSON.stringify(buildJsonReport(data), null, 2), "utf8");
+  writeFileSync(paths.html, buildHtmlReport(data), "utf8");
+  return { data, paths };
+}
 
 /** Espera a que el entorno responda antes de gastar una sola llamada al modelo. */
 async function waitForTarget(baseUrl: string, attempts = 10): Promise<void> {
@@ -98,6 +122,13 @@ async function waitForTarget(baseUrl: string, attempts = 10): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  // El gate falla cerrado: hasta que la corrida termine y decida, el código de
+  // salida dice "no se pudo ejecutar". Si el proceso terminara antes por
+  // cualquier motivo imprevisto —por ejemplo, que el event loop se vacíe en
+  // medio de una llamada—, Node saldría con 0 y el pipeline lo leería como QA
+  // aprobado. Se detectó forzando una llamada colgada en una prueba.
+  process.exitCode = EXIT_INFRA_ERROR;
+
   if (!config.baseUrl) {
     fail("Falta la URL del entorno. Definí QA_BASE_URL o pasá --base-url <url>.");
   }
@@ -120,9 +151,10 @@ async function main(): Promise<void> {
 
   const startedAt = new Date();
   const startedMs = performance.now();
+  let iterationsDone = 0;
 
   console.log(
-    `[qa-agent] arrancando · modelo=${config.model} · tope=${config.maxIterations} iteraciones / ${config.maxRequests} requests`,
+    `[qa-agent] arrancando · modelo=${config.model} · tope=${config.maxIterations} iteraciones / ${config.maxRequests} requests · timeout ${Math.round(config.requestTimeoutMs / 1000)} s por llamada`,
   );
 
   let result;
@@ -139,9 +171,11 @@ async function main(): Promise<void> {
       tools,
       maxIterations: config.maxIterations,
       maxOutputTokens: config.maxOutputTokens,
+      requestTimeoutMs: config.requestTimeoutMs,
       closingToolName: "finish_run",
       shouldStop: () => session.outcome !== null,
       onIteration: (iteration) => {
+        iterationsDone = iteration;
         console.log(
           `[qa-agent] iteración ${iteration}/${config.maxIterations} · ` +
             `${session.requestCount} requests · ${session.findings.length} findings`,
@@ -149,18 +183,51 @@ async function main(): Promise<void> {
       },
     });
   } catch (error) {
-    if (error instanceof AgentError) {
-      // Un 404 casi siempre es un id de modelo que no existe en este tier.
-      // Listar lo disponible ahorra una vuelta de diagnóstico.
-      if (/404/.test(error.message)) {
-        const available = await listAvailableModels(config.apiKey);
-        if (available.length > 0) {
-          console.error(`\n[qa-agent] modelos disponibles para tu key: ${available.join(", ")}`);
-        }
-      }
-      fail(error.message);
+    const reason = error instanceof Error ? error.message : String(error);
+
+    // Lo que el agente alcanzó a hacer se guarda igual. Antes, una corrida que
+    // abortaba no dejaba nada: en una corrida real se perdieron 21 requests y
+    // un hallazgo registrado, y no hubo forma de saber qué había encontrado.
+    // Si escribir el reporte falla, no puede tapar el error original.
+    try {
+      const partialMeta: RunMeta = {
+        baseUrl: config.baseUrl,
+        model: config.model,
+        startedAt: startedAt.toISOString(),
+        durationMs: Math.round(performance.now() - startedMs),
+        iterations: iterationsDone,
+        maxIterations: config.maxIterations,
+        hitIterationCap: false,
+        failOn: config.failOn,
+        abortReason: reason,
+      };
+      const { paths } = writeReports(
+        session,
+        partialMeta,
+        abortedGate(session, config.failOn, reason),
+        openapiYaml,
+      );
+      console.error(
+        `[qa-agent] reporte parcial escrito: ${session.requestCount} requests y ` +
+          `${session.findings.length} finding(s) hasta el corte`,
+      );
+      console.error(`[qa-agent]   ${paths.md}`);
+      console.error(`[qa-agent]   ${paths.html}`);
+    } catch (reportError) {
+      console.error(
+        `[qa-agent] no se pudo escribir el reporte parcial: ${reportError instanceof Error ? reportError.message : String(reportError)}`,
+      );
     }
-    fail(error instanceof Error ? error.message : String(error));
+
+    // Un 404 casi siempre es un id de modelo que no existe en este tier.
+    // Listar lo disponible ahorra una vuelta de diagnóstico.
+    if (error instanceof AgentError && /404/.test(reason)) {
+      const available = await listAvailableModels(config.apiKey, config.requestTimeoutMs);
+      if (available.length > 0) {
+        console.error(`\n[qa-agent] modelos disponibles para tu key: ${available.join(", ")}`);
+      }
+    }
+    fail(reason);
   } finally {
     // Sin esto Chromium queda vivo y el proceso nunca termina.
     await browser.close();
@@ -190,14 +257,10 @@ async function main(): Promise<void> {
   };
 
   const gate = decideGate(session, config.failOn, hitIterationCap);
-  const data = buildReportData(session, meta, gate, openapiYaml);
-
-  const mdPath = resolve(config.outDir, "qa-report.md");
-  const jsonPath = resolve(config.outDir, "qa-report.json");
-  const htmlPath = resolve(config.outDir, "qa-report.html");
-  writeFileSync(mdPath, buildMarkdownReport(data), "utf8");
-  writeFileSync(jsonPath, JSON.stringify(buildJsonReport(data), null, 2), "utf8");
-  writeFileSync(htmlPath, buildHtmlReport(data), "utf8");
+  const { data, paths } = writeReports(session, meta, gate, openapiYaml);
+  const mdPath = paths.md;
+  const jsonPath = paths.json;
+  const htmlPath = paths.html;
 
   console.log(
     `[qa-agent] tokens · prompt=${result.usage.promptTokens} ` +

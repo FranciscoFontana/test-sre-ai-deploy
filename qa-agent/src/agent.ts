@@ -35,6 +35,8 @@ export interface AgentRunOptions {
   tools: QaTool[];
   maxIterations: number;
   maxOutputTokens: number;
+  /** Tiempo máximo que puede tardar cada llamada al modelo antes de abortarla. */
+  requestTimeoutMs: number;
   /** Se consulta después de cada ronda: si devuelve true, la corrida termina. */
   shouldStop: () => boolean;
   onIteration: (iteration: number) => void;
@@ -50,11 +52,69 @@ export class AgentError extends Error {}
 
 const RETRY_STATUSES = new Set([429, 500, 502, 503, 504]);
 const MAX_RETRIES = 5;
+/**
+ * Reintentos ante errores de red. Son menos que los de estado HTTP porque cada
+ * intento fallido puede costar el timeout completo: con 120 s por llamada, tres
+ * reintentos ya son ocho minutos en el peor caso.
+ */
+const MAX_NETWORK_RETRIES = 3;
 /** Cuántas veces se reintenta un turno cuya llamada a herramienta salió corrupta. */
 const MAX_MALFORMED_RETRIES = 3;
 
+/**
+ * Códigos de Node y de undici —el cliente HTTP de fetch— que indican un corte
+ * pasajero: la conexión se cayó o no llegó a establecerse, pero el servidor no
+ * dijo que la request estuviera mal.
+ */
+const TRANSIENT_NETWORK_CODES = new Set([
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "ETIMEDOUT",
+  "EPIPE",
+  "EAI_AGAIN",
+  "ENOTFOUND",
+  "UND_ERR_SOCKET",
+  "UND_ERR_CONNECT_TIMEOUT",
+  "UND_ERR_HEADERS_TIMEOUT",
+  "UND_ERR_BODY_TIMEOUT",
+]);
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Reconoce un error de red o un timeout, que no traen status HTTP.
+ *
+ * Hasta ahora sólo se reintentaban los errores con status (429, 503...), y un
+ * `fetch failed` —la conexión cortada antes de recibir respuesta— abortaba la
+ * corrida al primer intento, aunque es tan pasajero como un 503. Pasó en una
+ * corrida real: después de 21 requests y un hallazgo registrado, una sola
+ * llamada colgada tiró abajo todo.
+ *
+ * Devuelve una descripción para el log, o null si no es un error de red.
+ */
+function describeNetworkError(error: unknown, timeoutMs: number): string | null {
+  if (!(error instanceof Error) || error instanceof ApiError) return null;
+
+  // El SDK aborta cada intento al vencer el timeout con un AbortController.
+  if (error.name === "AbortError" || error.name === "TimeoutError") {
+    return `sin respuesta en ${Math.round(timeoutMs / 1000)} s`;
+  }
+
+  const cause = (error as { cause?: unknown }).cause;
+  const code =
+    typeof cause === "object" && cause !== null && "code" in cause
+      ? String((cause as { code: unknown }).code)
+      : undefined;
+
+  if (code !== undefined && TRANSIENT_NETWORK_CODES.has(code)) {
+    return `error de red (${code})`;
+  }
+  if (error.message === "fetch failed") {
+    return "error de red (fetch failed)";
+  }
+  return null;
 }
 
 /**
@@ -110,33 +170,57 @@ function describeApiError(error: ApiError): string {
  *
  * La capa gratuita de Gemini limita a pocas requests por minuto, así que un
  * 429 en mitad de una corrida es esperable y no debe abortar el gate: se
- * espera y se reintenta. Sólo se rinde después de MAX_RETRIES.
+ * espera y se reintenta. Lo mismo con un 503 cuando el servicio está
+ * saturado, y con los cortes de red y los timeouts, que no traen status.
+ *
+ * Los dos tipos de falla llevan contadores separados: los de red pueden costar
+ * el timeout completo en cada intento, así que tienen un tope más bajo.
  */
-async function callWithRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
+async function callWithRetry<T>(
+  fn: () => Promise<T>,
+  label: string,
+  timeoutMs: number,
+): Promise<T> {
   let lastError: unknown;
+  let httpRetries = 0;
+  let networkRetries = 0;
 
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
+  for (;;) {
     try {
       return await fn();
     } catch (error) {
       lastError = error;
+
+      const networkIssue = describeNetworkError(error, timeoutMs);
+      if (networkIssue !== null) {
+        if (networkRetries >= MAX_NETWORK_RETRIES) break;
+        networkRetries += 1;
+        const waitMs = 2_000 * 2 ** (networkRetries - 1);
+        console.log(
+          `[qa-agent] ${label}: ${networkIssue}, reintento ${networkRetries}/${MAX_NETWORK_RETRIES} en ${Math.round(waitMs / 1000)}s`,
+        );
+        await sleep(waitMs);
+        continue;
+      }
+
       const status = error instanceof ApiError ? error.status : undefined;
-      if (status === undefined || !RETRY_STATUSES.has(status) || attempt === MAX_RETRIES) {
+      if (status === undefined || !RETRY_STATUSES.has(status) || httpRetries >= MAX_RETRIES) {
         break;
       }
       if (status === 429 && error instanceof ApiError && isDailyQuotaError(error.message ?? "")) {
         // Esperar no sirve: la cuota diaria no se renueva en un minuto.
         break;
       }
-      if (status === 429 && attempt === 0 && error instanceof ApiError) {
+      if (status === 429 && httpRetries === 0 && error instanceof ApiError) {
         // Se muestra el detalle de Google la primera vez: dice qué cuota se
         // agotó y en cuánto se renueva, que es justo lo que hace falta saber.
         console.log(`[qa-agent] detalle del 429: ${(error.message ?? "").slice(0, 400)}`);
       }
+      httpRetries += 1;
       // Un 429 por límite por minuto sí se destraba esperando.
-      const waitMs = status === 429 ? 20_000 : 2_000 * 2 ** attempt;
+      const waitMs = status === 429 ? 20_000 : 2_000 * 2 ** (httpRetries - 1);
       console.log(
-        `[qa-agent] ${label}: ${status}, reintento ${attempt + 1}/${MAX_RETRIES} en ${Math.round(waitMs / 1000)}s`,
+        `[qa-agent] ${label}: ${status}, reintento ${httpRetries}/${MAX_RETRIES} en ${Math.round(waitMs / 1000)}s`,
       );
       await sleep(waitMs);
     }
@@ -145,14 +229,21 @@ async function callWithRetry<T>(fn: () => Promise<T>, label: string): Promise<T>
   if (lastError instanceof ApiError) {
     throw new AgentError(describeApiError(lastError));
   }
+  const networkIssue = describeNetworkError(lastError, timeoutMs);
+  if (networkIssue !== null) {
+    throw new AgentError(
+      `Gemini no respondió después de ${MAX_NETWORK_RETRIES} reintentos (${networkIssue}). ` +
+        "Suele ser una degradación pasajera del servicio: reintentá la corrida más tarde.",
+    );
+  }
   throw new AgentError(
     `Fallo inesperado llamando a Gemini: ${lastError instanceof Error ? lastError.message : String(lastError)}`,
   );
 }
 
 /** Lista los modelos disponibles para la key, para diagnosticar un 404. */
-export async function listAvailableModels(apiKey: string): Promise<string[]> {
-  const ai = new GoogleGenAI({ apiKey });
+export async function listAvailableModels(apiKey: string, timeoutMs: number): Promise<string[]> {
+  const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: timeoutMs } });
   const names: string[] = [];
   try {
     const pager = await ai.models.list();
@@ -174,7 +265,13 @@ export async function listAvailableModels(apiKey: string): Promise<string[]> {
  * qué hacer ante cada error. Ese control es el gate.
  */
 export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult> {
-  const ai = new GoogleGenAI({ apiKey: options.apiKey });
+  // Sin timeout propio, una llamada colgada queda a merced del de undici, que
+  // son cinco minutos. El SDK aplica este valor por intento, no a la secuencia
+  // entera de reintentos.
+  const ai = new GoogleGenAI({
+    apiKey: options.apiKey,
+    httpOptions: { timeout: options.requestTimeoutMs },
+  });
 
   const functionDeclarations = options.tools.map((tool) => ({
     name: tool.name,
@@ -232,6 +329,7 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
           },
         }),
       "generateContent",
+      options.requestTimeoutMs,
     );
 
     iterations += 1;
@@ -332,6 +430,7 @@ export async function runAgent(options: AgentRunOptions): Promise<AgentRunResult
           },
         }),
       "cierre forzado",
+      options.requestTimeoutMs,
     );
 
     iterations += 1;
