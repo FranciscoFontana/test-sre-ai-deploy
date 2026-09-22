@@ -66,14 +66,16 @@ const config = {
   // Primero se eligió gemini-3.5-flash-lite por medición: cerró en 5
   // iteraciones, sin llamadas corruptas y con 29k tokens contra 271k.
   //
-  // El 22/09/2026 flash-lite quedó saturado del lado de Google durante horas
-  // ("This model is currently experiencing high demand") y ninguna corrida
-  // pudo completarse. Se pasó a gemini-3.5-flash, que tiene capacidad y cuota
-  // propias. Sus problemas anteriores —llamadas mal formadas, no cerrar solo—
-  // venían del esquema viejo de report_finding y de la falta de cierre forzado
-  // al llegar al tope, ambos corregidos después. Consume más tokens que
-  // flash-lite: si flash-lite se normaliza, conviene volver a él.
-  model: process.env.QA_MODEL ?? "gemini-3.5-flash",
+  // El 22/09/2026 flash-lite quedó saturado durante horas ("This model is
+  // currently experiencing high demand") y se pasó a gemini-3.5-flash, que
+  // respondía más rápido. Pero ese mismo día se agotó su cuota DIARIA sin
+  // haber completado una sola corrida: cada reintento ante un 503 también
+  // consume cuota, y las ráfagas de ese día se llevaron el presupuesto.
+  //
+  // Se vuelve a flash-lite, que nunca llegó al 429 ese día —sólo fallaba por
+  // saturación— y por lo tanto conserva su cuota, además de ser el que mejor
+  // funcionó: 5 iteraciones, sin llamadas corruptas, 29k tokens contra 271k.
+  model: process.env.QA_MODEL ?? "gemini-3.5-flash-lite",
   // Medido: el agente hace el trabajo útil en las primeras 5 iteraciones y
   // después se queda girando, una request por turno, sin converger. Como cada
   // iteración reenvía todo el historial, las de más cuestan cuota y no aportan.

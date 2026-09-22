@@ -133,13 +133,12 @@ anteriores en vez de creerle al agente.
 
 ## Costo
 
-El agente corre con **Gemini 3.5 Flash en la capa gratuita** de Google AI Studio:
+El agente corre con **Gemini 3.5 Flash Lite en la capa gratuita** de Google AI Studio:
 sin tarjeta de crédito y sin costo por corrida. Lo que se consume es cuota, no dinero.
 
-Originalmente usaba Gemini 3.5 Flash Lite, que consume menos tokens. Se cambió porque
-ese modelo quedó saturado del lado de Google durante horas y ninguna corrida podía
-completarse. Si se normaliza, conviene volver a él: el motivo está en
-`qa-agent/src/index.ts`.
+Cuando un modelo está saturado o sin cuota, se puede cambiar con `QA_MODEL` sin tocar
+código. Tené en cuenta que **los reintentos también consumen cuota**: un día con muchos
+`503` puede agotar el presupuesto diario de un modelo sin completar una sola corrida.
 
 Los límites de la capa gratuita son acotados — del orden de 10 requests por minuto
 y unos cientos por día, y Google los ajusta con el tiempo. Para esta prueba de
@@ -197,7 +196,7 @@ cd qa-agent && npm ci && QA_BASE_URL=http://localhost:3000 npm run qa
 |---|---|---|
 | `QA_BASE_URL` | — | Entorno a probar. Obligatoria. |
 | `GEMINI_API_KEY` | — | Credencial de Google AI Studio. Obligatoria. |
-| `QA_MODEL` | `gemini-3.5-flash` | Modelo a usar. |
+| `QA_MODEL` | `gemini-3.5-flash-lite` | Modelo a usar. |
 | `QA_FAIL_ON` | `high` | Gravedad mínima que bloquea el deploy. |
 | `QA_MAX_ITERATIONS` | `12` | Tope de iteraciones del loop agéntico. |
 | `QA_MAX_REQUESTS` | `80` | Tope de requests HTTP por corrida. |
