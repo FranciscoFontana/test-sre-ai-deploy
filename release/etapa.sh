@@ -122,6 +122,17 @@ case "$ACCION" in
     ;;
 
   prod-rollback)
+    # Defensa contra una condición mal configurada en la interfaz. Esta tarea
+    # tiene que correr sólo si falló una anterior; si por error corre siempre,
+    # deshace cada deploy bueno. Como la configuración del release no está
+    # versionada, el script no confía en ella: si producción ya está sana con
+    # la versión de esta release, no hay nada que revertir.
+    if bash scripts/smoke-prod.sh "$IMAGE_TAG" >/dev/null 2>&1; then
+      echo "##vso[task.logissue type=warning]Rollback omitido: producción está sana y sirve $IMAGE_TAG. Si ningún paso falló, esta tarea no debería haber corrido: revisá Control Options → Run this task, tiene que ser 'Only when a previous task has failed'."
+      log "producción sana con $IMAGE_TAG: no hay nada que revertir"
+      exit 0
+    fi
+
     PREV="$(cat "$PREV_TAG_FILE" 2>/dev/null || true)"
     log "rollback de producción a: ${PREV:-(no hay versión anterior)}"
     bash scripts/rollback.sh "$PREV"

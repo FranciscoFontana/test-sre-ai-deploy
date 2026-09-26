@@ -222,16 +222,28 @@ Arriba, renombrá *New release pipeline* a **`az-release`**.
 
 **Agent job**: Display name `Agente QA`, Agent pool **Default**.
 
-Tres tareas **Command line**. Todas con:
+Tres tareas **Command line**. Todas con **Advanced → Working Directory**:
 
-- **Script**: `"C:\Program Files\Git\bin\bash.exe" release/etapa.sh <acción>`
-- **Advanced → Working Directory**: `$(System.DefaultWorkingDirectory)\_az-build\entrega`
+```
+$(System.DefaultWorkingDirectory)\_az-build\entrega
+```
 
-| # | Display name | Acción | Control Options → Run this task | Environment Variables |
-|---|---|---|---|---|
-| 1 | `Desplegar en QA` | `qa-desplegar` | Only when all previous tasks have succeeded | — |
-| 2 | `Agente de QA con IA` | `qa-agente` | Only when all previous tasks have succeeded | **`GEMINI_API_KEY`** = `$(GEMINI_API_KEY)` |
-| 3 | `Publicar reporte` | `qa-reporte` | **Even if a previous task has failed, unless the deployment was canceled** | — |
+El **Script** de cada una se copia **tal cual**, sin agregar ni sacar nada:
+
+| # | Display name | Script |
+|---|---|---|
+| 1 | `Desplegar en QA` | `"C:\Program Files\Git\bin\bash.exe" release/etapa.sh qa-desplegar` |
+| 2 | `Agente de QA con IA` | `"C:\Program Files\Git\bin\bash.exe" release/etapa.sh qa-agente` |
+| 3 | `Publicar reporte` | `"C:\Program Files\Git\bin\bash.exe" release/etapa.sh qa-reporte` |
+
+**No uses `< >` alrededor de la acción**: en `cmd` esos símbolos son redirecciones de
+archivos y la tarea no corre.
+
+| # | Control Options → Run this task | Environment Variables |
+|---|---|---|
+| 1 | Only when all previous tasks have succeeded | — |
+| 2 | Only when all previous tasks have succeeded | **`GEMINI_API_KEY`** = `$(GEMINI_API_KEY)` |
+| 3 | **Even if a previous task has failed, unless the deployment was canceled** | — |
 
 La variable de entorno de la tarea 2 es imprescindible: las variables secretas no llegan
 solas. Si falta, la tarea falla diciendo exactamente esto.
@@ -257,15 +269,31 @@ Sobre la cajita QA → **+ Add** → **New stage** → **Empty job** → **`Prod
 
 ### C8. Tareas de Producción
 
-**Agent job**: Display name `Deploy producción`, Agent pool **Default**. Cuatro tareas
-**Command line**, mismo Script y Working Directory que en QA:
+**Agent job**: Display name `Deploy producción`, Agent pool **Default**.
 
-| # | Display name | Acción | Control Options → Run this task |
-|---|---|---|---|
-| 1 | `Desplegar en producción` | `prod-desplegar` | Only when all previous tasks have succeeded |
-| 2 | `Smoke test` | `prod-smoke` | Only when all previous tasks have succeeded |
-| 3 | `Rollback` | `prod-rollback` | **Only when a previous task has failed** |
-| 4 | `Cierre: bajar QA y resumen` | `prod-cierre` | **Even if a previous task has failed, unless the deployment was canceled** |
+**Atención con el pool:** un stage nuevo arranca con el pool **Azure Pipelines**, que son
+máquinas de Microsoft en la nube. Desde ahí no se llega a tu Docker. Hay que cambiarlo a
+**Default** a mano, igual que en QA.
+
+Cuatro tareas **Command line**, con el mismo Working Directory que en QA:
+
+| # | Display name | Script |
+|---|---|---|
+| 1 | `Desplegar en producción` | `"C:\Program Files\Git\bin\bash.exe" release/etapa.sh prod-desplegar` |
+| 2 | `Smoke test` | `"C:\Program Files\Git\bin\bash.exe" release/etapa.sh prod-smoke` |
+| 3 | `Rollback` | `"C:\Program Files\Git\bin\bash.exe" release/etapa.sh prod-rollback` |
+| 4 | `Cierre: bajar QA y resumen` | `"C:\Program Files\Git\bin\bash.exe" release/etapa.sh prod-cierre` |
+
+| # | Control Options → Run this task |
+|---|---|
+| 1 | Only when all previous tasks have succeeded |
+| 2 | Only when all previous tasks have succeeded |
+| 3 | **Only when a previous task has failed** |
+| 4 | **Even if a previous task has failed, unless the deployment was canceled** |
+
+**Atención con el Rollback:** por defecto toda tarea corre *"Only when all previous tasks
+have succeeded"*. Si el Rollback queda así, **deshace cada deploy exitoso** y vuelve a la
+versión anterior. Tiene que decir *"Only when a previous task has failed"*.
 
 ### C9. Variables
 
@@ -276,11 +304,19 @@ Sobre la cajita QA → **+ Add** → **New stage** → **Empty job** → **`Prod
 | `GEMINI_API_KEY` | la key de A3 | **Sí** (candado) | **QA** | No |
 | `SEED_BUG` | `none` | No | **QA** | No |
 
+**El candado es obligatorio**: se hace clic en el ícono de la fila de `GEMINI_API_KEY`
+después de pegar el valor. Sin él, la key queda en texto plano en la interfaz y en el JSON
+que se exporta en C10. Para comprobarlo, el valor tiene que verse como `********`.
+
 ### C10. Guardar y respaldar
 
 **Save**. Después, **Releases** → `az-release` → **⋮** → **Export**, y guardá el JSON en
 esta rama como `release/az-release.json`, para que la configuración de la interfaz también
 quede versionada. Volvé a exportarlo cada vez que cambies algo del release.
+
+Antes de commitearlo, verificá que no tenga secretos: `GEMINI_API_KEY` tiene que figurar
+con `"isSecret": true` y sin valor. Si aparece la key, la variable no quedó como secreta:
+volvé a C9, y además revocá esa key, porque ya salió de Azure.
 
 ---
 
