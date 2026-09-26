@@ -32,24 +32,53 @@ function asString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
-/** Techo del relleno, para que un {{PAD:...}} enorme no se coma la memoria. */
+/** Techo del relleno en el cuerpo, para que un {{PAD:...}} enorme no se coma la memoria. */
 const MAX_PAD_CHARS = 2_000_000;
 
 /**
- * Expande {{PAD:n}} a n caracteres dentro del cuerpo de la request.
+ * Techo del relleno en la URL. Node rechaza con 431 una request cuya línea de
+ * pedido más los headers pasan de 16 KB, así que un relleno más grande no
+ * probaría la app sino el servidor HTTP. Con 4000 alcanza para cualquier
+ * límite de longitud razonable de un parámetro.
+ */
+const MAX_PAD_CHARS_PATH = 4_000;
+
+const PAD_MARKER = /\{\{PAD:(\d+)\}\}/g;
+
+/**
+ * Un intento de marcador PAD que no tiene la forma exacta: {{PAD}},
+ * {{pad:5}}, {{ PAD:5 }}. Deliberadamente no atrapa cualquier {{...}}: un
+ * texto como {{7*7}} es una prueba legítima de inyección de plantillas y
+ * tiene que llegar a la app tal cual.
+ */
+const MALFORMED_PAD = /\{\{\s*PAD\b[^}]*\}\}/i;
+
+/**
+ * Expande {{PAD:n}} a n caracteres, en el cuerpo o en el path.
  *
- * Existe porque el modelo no puede escribir un cuerpo de 100kb: tendría que
- * emitir cien mil caracteres dentro de los argumentos de la llamada, muy por
- * encima de su presupuesto de salida. Sin esto, al intentar probar el límite
- * de tamaño que exige el contrato mandaba un cuerpo truncado, recibía
+ * Existe porque el modelo no puede escribir un cuerpo de 100kb ni un
+ * parámetro de cientos de caracteres: tendría que emitirlos dentro de los
+ * argumentos de la llamada, y además los cuenta mal. Sin esto, al intentar
+ * probar el límite de tamaño mandaba un cuerpo truncado, recibía
  * MALFORMED_JSON y reportaba como bug lo que era una limitación de la
  * herramienta.
+ *
+ * Al principio sólo se expandía en el cuerpo. El agente, razonablemente, lo
+ * usó también en un parámetro de query (?q={{PAD:105}}); el marcador viajó
+ * literal, 11 caracteres, la app respondió 200 como correspondía, y el
+ * agente reportó un bug que no existía y bloqueó un deploy.
  */
-function expandPadding(body: string): string {
-  return body.replace(/\{\{PAD:(\d+)\}\}/g, (_match, digits: string) => {
-    const size = Math.min(Number(digits), MAX_PAD_CHARS);
-    return "A".repeat(size);
-  });
+function expandPadding(text: string, max: number): string {
+  return text.replace(PAD_MARKER, (_match, digits: string) => "A".repeat(Math.min(Number(digits), max)));
+}
+
+/** El mayor n de los {{PAD:n}} presentes, o 0 si no hay ninguno. */
+function largestPad(text: string): number {
+  let largest = 0;
+  for (const match of text.matchAll(PAD_MARKER)) {
+    largest = Math.max(largest, Number(match[1]));
+  }
+  return largest;
 }
 
 function asStringRecord(value: unknown): Record<string, string> {
@@ -78,10 +107,12 @@ export function buildTools(session: QaSession): QaTool[] {
       "Sólo se indica el path (por ejemplo /api/todos): el host es fijo y no se puede cambiar.",
       "El campo body es un STRING crudo, no un objeto: mandá JSON ya serializado.",
       "Eso te permite probar a propósito cuerpos malformados, por ejemplo un JSON sin cerrar.",
-      "Para probar límites de tamaño usá el marcador {{PAD:n}} dentro del body:",
-      'se reemplaza por n caracteres antes de enviar. Por ejemplo {"title":"{{PAD:150000}}"}',
-      "manda un cuerpo de más de 100kb. Escribir vos mismo un cuerpo tan grande es imposible,",
-      "así que sin este marcador no podés probar el límite de tamaño.",
+      "Para probar límites de tamaño usá el marcador {{PAD:n}}: se reemplaza por n caracteres",
+      "antes de enviar, y funciona tanto en el body como en el path.",
+      'En el body: {"title":"{{PAD:150000}}"} manda un cuerpo de más de 100kb.',
+      "En el path: /api/todos?q={{PAD:105}} manda un parámetro q de 105 caracteres (máximo 4000).",
+      "Escribir vos mismo textos tan largos es imposible y los contarías mal: usá siempre el marcador.",
+      "La respuesta informa sentBodyBytes y sentPathChars para que confirmes cuánto viajó.",
     ].join(" "),
     inputSchema: {
       type: "object",
@@ -132,14 +163,37 @@ export function buildTools(session: QaSession): QaTool[] {
 
       const purpose = asString(args.purpose);
       const rawBody = asString(args.body);
-      const body = rawBody === undefined ? undefined : expandPadding(rawBody);
+
+      // Un marcador que no se puede expandir no se manda nunca: viajaría como
+      // texto literal y el agente creería haber probado otra cosa. Se le
+      // devuelve el error para que corrija la llamada.
+      for (const [donde, texto] of [["path", path], ["body", rawBody ?? ""]] as const) {
+        const withoutValid = texto.replace(PAD_MARKER, "");
+        const bad = MALFORMED_PAD.exec(withoutValid);
+        if (bad) {
+          return JSON.stringify({
+            error: `Marcador mal formado en ${donde}: ${bad[0]}. La forma exacta es {{PAD:n}}, con n un número. No se envió la request.`,
+          });
+        }
+      }
+      if (largestPad(path) > MAX_PAD_CHARS_PATH) {
+        return JSON.stringify({
+          error: `En el path, {{PAD:n}} admite hasta ${MAX_PAD_CHARS_PATH} caracteres: más que eso lo rechaza el servidor HTTP con 431 antes de llegar a la app, y no probaría nada del contrato. No se envió la request.`,
+        });
+      }
+
+      const padInPath = largestPad(path) > 0;
+      const sentPath = expandPadding(path, MAX_PAD_CHARS_PATH);
+      const body = rawBody === undefined ? undefined : expandPadding(rawBody, MAX_PAD_CHARS);
       const headers = asStringRecord(args.headers);
       const hasContentType = Object.keys(headers).some((h) => h.toLowerCase() === "content-type");
       if (body !== undefined && !hasContentType) {
         headers["content-type"] = "application/json";
       }
 
-      const url = `${session.baseUrl}${path}`;
+      const url = `${session.baseUrl}${sentPath}`;
+      // En la evidencia va lo que viajó de verdad, recortado si es largo.
+      const loggedPath = truncate(sentPath, MAX_EVIDENCE_CHARS);
       const startedAt = performance.now();
       try {
         const response = await fetch(url, {
@@ -153,7 +207,7 @@ export function buildTools(session: QaSession): QaTool[] {
 
         session.requestLog.push({
           method,
-          path,
+          path: loggedPath,
           status: response.status,
           latencyMs,
           ...(purpose !== undefined ? { purpose } : {}),
@@ -174,6 +228,9 @@ export function buildTools(session: QaSession): QaTool[] {
           // tiene otra forma de saber cuantos bytes salieron de verdad, y sin
           // ese dato no puede juzgar si probo el limite que queria probar.
           ...(body !== undefined ? { sentBodyBytes: Buffer.byteLength(body) } : {}),
+          // Mismo motivo para el path: si usó {{PAD:n}} ahí, tiene que poder
+          // comprobar cuántos caracteres viajaron.
+          ...(padInPath ? { sentPathChars: sentPath.length } : {}),
           body: truncate(text),
         });
       } catch (error) {
@@ -181,7 +238,7 @@ export function buildTools(session: QaSession): QaTool[] {
         const message = error instanceof Error ? error.message : String(error);
         session.requestLog.push({
           method,
-          path,
+          path: loggedPath,
           status: null,
           latencyMs,
           ...(purpose !== undefined ? { purpose } : {}),

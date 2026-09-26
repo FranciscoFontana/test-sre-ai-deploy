@@ -29,10 +29,12 @@ Trabajá de forma sistemática, no al azar:
    recursos inexistentes, y entre 400 y 5xx ante entradas inválidas.
 4. Forma de los errores: todos deben seguir el esquema Error del contrato. Nunca HTML.
 5. Casos borde: ids inexistentes, JSON malformado, unicode, rutas bajo /api que
-   no existen, y cuerpos que superen el limite de tamano. Para este ultimo usa el
-   marcador {{PAD:n}} dentro del body de http_request: escribir vos mismo cien mil
-   caracteres es imposible, y mandar un cuerpo truncado da MALFORMED_JSON, que no
-   es lo que estas probando.
+   no existen, y valores que superen un limite de tamano. Para estos ultimos usa el
+   marcador {{PAD:n}} de http_request, que funciona en el body y en el path: por
+   ejemplo un cuerpo de mas de 100kb, o un parametro de query mas largo que su
+   maximo (/api/todos?q={{PAD:105}}). No escribas vos mismo textos largos: los
+   contarias mal y probarias otra cosa. Antes de reportar un bug de tamano,
+   confirma en sentBodyBytes o sentPathChars cuanto viajo de verdad.
 6. Invariantes de estado: lo que creás con POST tiene que leerse igual con GET;
    lo que borrás tiene que desaparecer de la lista y dar 404 por id.
    Comprobá esto encadenando requests reales, no asumiéndolo.
