@@ -120,8 +120,8 @@ Expand-Archive -Path "$HOME\Downloads\vsts-agent-win-x64-*.zip" -DestinationPath
 | Pregunta | Respuesta |
 |---|---|
 | Enter server URL | `https://dev.azure.com/frfontana` |
-| Enter authentication type | Enter (PAT) |
-| Enter personal access token | el token de A5 |
+| Enter authentication type | **apretá la tecla Enter sin escribir nada** (elige PAT). No pegues el token acá |
+| Enter personal access token | recién acá pegá el token de A5. Es normal que no se vea al pegarlo |
 | Enter agent pool | Enter (`Default`) |
 | Enter agent name | `DESKTOP-6LR1GGH-azure` |
 | Enter work folder | Enter (`_work`) |
@@ -168,10 +168,21 @@ Segunda capa de protección: la interfaz puede pisar lo que dice el YAML.
   **Disable pull request validation**.
 - **Save**.
 
-### B4. Primer build
+### B4. Autorizar el build a usar la conexión de GitHub
 
-**Run pipeline** → Branch **`azure-devops`** → **Run**. La primera vez pide permiso para
-usar `github-producto` y el pool `Default`: **View** → **Permit**.
+Como la conexión se creó sin *Grant access permission to all pipelines*, hay que
+autorizar este pipeline a mano. Para repositorios declarados como resource, Azure **no**
+ofrece un botón *Permit* en la primera corrida: rechaza la corrida antes de encolarla con
+*"Repository producto references endpoint github-producto which does not exist or is not
+authorized for use"*.
+
+**Project settings** → **Service connections** → **`github-producto`** → **⋮** (arriba a la
+derecha) → **Security** → sección **Pipeline permissions** → **+** → elegí **`az-build`**.
+
+### B5. Primer build
+
+**Run pipeline** → Branch **`azure-devops`** → **Run**. Si pide permiso para el pool
+`Default`: **View** → **Permit**.
 
 Al terminar: pestaña **Tests** con los 45 tests y tres artifacts, `entrega`, `producto-qa`
 y `manifest`.
