@@ -1,0 +1,585 @@
+{
+  "source": 2,
+  "revision": 6,
+  "description": null,
+  "createdBy": {
+    "displayName": "FONTANA FRANCISCO",
+    "url": "https://spsprodsbr2.vssps.visualstudio.com/A874074e5-164c-438c-86c1-287659349f61/_apis/Identities/864cfca1-76a7-629d-a837-f8c754d94381",
+    "_links": {
+      "avatar": {
+        "href": "https://dev.azure.com/frfontana/_apis/GraphProfile/MemberAvatars/aad.ODY0Y2ZjYTEtNzZhNy03MjlkLWE4MzctZjhjNzU0ZDk0Mzgx"
+      }
+    },
+    "id": "864cfca1-76a7-629d-a837-f8c754d94381",
+    "uniqueName": "frfontana@uade.edu.ar",
+    "imageUrl": "https://dev.azure.com/frfontana/_apis/GraphProfile/MemberAvatars/aad.ODY0Y2ZjYTEtNzZhNy03MjlkLWE4MzctZjhjNzU0ZDk0Mzgx",
+    "descriptor": "aad.ODY0Y2ZjYTEtNzZhNy03MjlkLWE4MzctZjhjNzU0ZDk0Mzgx"
+  },
+  "createdOn": "2026-09-26T20:15:21.500Z",
+  "modifiedBy": {
+    "displayName": "FONTANA FRANCISCO",
+    "url": "https://spsprodsbr2.vssps.visualstudio.com/A874074e5-164c-438c-86c1-287659349f61/_apis/Identities/864cfca1-76a7-629d-a837-f8c754d94381",
+    "_links": {
+      "avatar": {
+        "href": "https://dev.azure.com/frfontana/_apis/GraphProfile/MemberAvatars/aad.ODY0Y2ZjYTEtNzZhNy03MjlkLWE4MzctZjhjNzU0ZDk0Mzgx"
+      }
+    },
+    "id": "864cfca1-76a7-629d-a837-f8c754d94381",
+    "uniqueName": "frfontana@uade.edu.ar",
+    "imageUrl": "https://dev.azure.com/frfontana/_apis/GraphProfile/MemberAvatars/aad.ODY0Y2ZjYTEtNzZhNy03MjlkLWE4MzctZjhjNzU0ZDk0Mzgx",
+    "descriptor": "aad.ODY0Y2ZjYTEtNzZhNy03MjlkLWE4MzctZjhjNzU0ZDk0Mzgx"
+  },
+  "modifiedOn": "2026-09-26T20:34:52.500Z",
+  "isDeleted": false,
+  "isDisabled": false,
+  "variables": {},
+  "variableGroups": [],
+  "environments": [
+    {
+      "id": 1,
+      "name": "QA",
+      "rank": 1,
+      "owner": {
+        "displayName": "FONTANA FRANCISCO",
+        "url": "https://spsprodsbr2.vssps.visualstudio.com/A874074e5-164c-438c-86c1-287659349f61/_apis/Identities/864cfca1-76a7-629d-a837-f8c754d94381",
+        "_links": {
+          "avatar": {
+            "href": "https://dev.azure.com/frfontana/_apis/GraphProfile/MemberAvatars/aad.ODY0Y2ZjYTEtNzZhNy03MjlkLWE4MzctZjhjNzU0ZDk0Mzgx"
+          }
+        },
+        "id": "864cfca1-76a7-629d-a837-f8c754d94381",
+        "uniqueName": "frfontana@uade.edu.ar",
+        "imageUrl": "https://dev.azure.com/frfontana/_apis/GraphProfile/MemberAvatars/aad.ODY0Y2ZjYTEtNzZhNy03MjlkLWE4MzctZjhjNzU0ZDk0Mzgx",
+        "descriptor": "aad.ODY0Y2ZjYTEtNzZhNy03MjlkLWE4MzctZjhjNzU0ZDk0Mzgx"
+      },
+      "variables": {
+        "GEMINI_API_KEY": {
+          "value": null,
+          "isSecret": true
+        },
+        "SEED_BUG": {
+          "value": "none"
+        }
+      },
+      "variableGroups": [],
+      "preDeployApprovals": {
+        "approvals": [
+          {
+            "rank": 1,
+            "isAutomated": true,
+            "isNotificationOn": false,
+            "id": 1
+          }
+        ],
+        "approvalOptions": {
+          "requiredApproverCount": null,
+          "releaseCreatorCanBeApprover": false,
+          "autoTriggeredAndPreviousEnvironmentApprovedCanBeSkipped": false,
+          "enforceIdentityRevalidation": false,
+          "timeoutInMinutes": 0,
+          "executionOrder": 1
+        }
+      },
+      "deployStep": {
+        "id": 2
+      },
+      "postDeployApprovals": {
+        "approvals": [
+          {
+            "rank": 1,
+            "isAutomated": true,
+            "isNotificationOn": false,
+            "id": 3
+          }
+        ],
+        "approvalOptions": {
+          "requiredApproverCount": null,
+          "releaseCreatorCanBeApprover": false,
+          "autoTriggeredAndPreviousEnvironmentApprovedCanBeSkipped": false,
+          "enforceIdentityRevalidation": false,
+          "timeoutInMinutes": 0,
+          "executionOrder": 2
+        }
+      },
+      "deployPhases": [
+        {
+          "deploymentInput": {
+            "parallelExecution": {
+              "parallelExecutionType": 0
+            },
+            "agentSpecification": null,
+            "skipArtifactsDownload": false,
+            "artifactsDownloadInput": {
+              "downloadInputs": []
+            },
+            "queueId": 1,
+            "demands": [],
+            "enableAccessToken": false,
+            "timeoutInMinutes": 0,
+            "jobCancelTimeoutInMinutes": 1,
+            "condition": "succeeded()",
+            "overrideInputs": {}
+          },
+          "rank": 1,
+          "phaseType": 1,
+          "name": "Agent QA",
+          "refName": null,
+          "workflowTasks": [
+            {
+              "taskId": "d9bafed4-0b18-4f58-968d-86655b4d2ce9",
+              "version": "2.*",
+              "name": "Desplegar en QA",
+              "refName": "",
+              "enabled": true,
+              "alwaysRun": false,
+              "continueOnError": false,
+              "timeoutInMinutes": 0,
+              "retryCountOnTaskFailure": 0,
+              "definitionType": "task",
+              "overrideInputs": {},
+              "condition": "succeeded()",
+              "environment": {},
+              "inputs": {
+                "script": "\"C:\\Program Files\\Git\\bin\\bash.exe\" release/etapa.sh qa-desplegar\n",
+                "workingDirectory": "$(System.DefaultWorkingDirectory)\\_az-build\\entrega",
+                "failOnStderr": "false"
+              }
+            },
+            {
+              "taskId": "d9bafed4-0b18-4f58-968d-86655b4d2ce9",
+              "version": "2.*",
+              "name": "Agente de QA con IA",
+              "refName": "",
+              "enabled": true,
+              "alwaysRun": false,
+              "continueOnError": false,
+              "timeoutInMinutes": 0,
+              "retryCountOnTaskFailure": 0,
+              "definitionType": "task",
+              "overrideInputs": {},
+              "condition": "succeeded()",
+              "environment": {
+                "GEMINI_API_KEY": "$(GEMINI_API_KEY)"
+              },
+              "inputs": {
+                "script": "\"C:\\Program Files\\Git\\bin\\bash.exe\" release/etapa.sh qa-agente\n",
+                "workingDirectory": "$(System.DefaultWorkingDirectory)\\_az-build\\entrega",
+                "failOnStderr": "false"
+              }
+            },
+            {
+              "taskId": "d9bafed4-0b18-4f58-968d-86655b4d2ce9",
+              "version": "2.*",
+              "name": "Publicar reporte",
+              "refName": "",
+              "enabled": true,
+              "alwaysRun": false,
+              "continueOnError": false,
+              "timeoutInMinutes": 0,
+              "retryCountOnTaskFailure": 0,
+              "definitionType": "task",
+              "overrideInputs": {},
+              "condition": "succeededOrFailed()",
+              "environment": {},
+              "inputs": {
+                "script": "\"C:\\Program Files\\Git\\bin\\bash.exe\" release/etapa.sh qa-reporte\n",
+                "workingDirectory": "$(System.DefaultWorkingDirectory)\\_az-build\\entrega",
+                "failOnStderr": "false"
+              }
+            }
+          ]
+        }
+      ],
+      "environmentOptions": {
+        "emailNotificationType": "OnlyOnFailure",
+        "emailRecipients": "release.environment.owner;release.creator",
+        "skipArtifactsDownload": false,
+        "timeoutInMinutes": 0,
+        "enableAccessToken": false,
+        "publishDeploymentStatus": true,
+        "badgeEnabled": false,
+        "autoLinkWorkItems": false,
+        "pullRequestDeploymentEnabled": false
+      },
+      "demands": [],
+      "conditions": [
+        {
+          "name": "ReleaseStarted",
+          "conditionType": 1,
+          "value": "",
+          "result": null
+        }
+      ],
+      "executionPolicy": {
+        "concurrencyCount": 1,
+        "queueDepthCount": 0
+      },
+      "schedules": [],
+      "currentRelease": {
+        "id": 0,
+        "url": "https://vsrm.dev.azure.com/frfontana/0f66bcc1-bb0f-4cd4-8f61-d0904056c304/_apis/Release/releases/0",
+        "_links": {}
+      },
+      "retentionPolicy": {
+        "daysToKeep": 30,
+        "releasesToKeep": 3,
+        "retainBuild": true
+      },
+      "processParameters": {},
+      "properties": {
+        "BoardsEnvironmentType": {
+          "$type": "System.String",
+          "$value": "unmapped"
+        },
+        "LinkBoardsWorkItems": {
+          "$type": "System.String",
+          "$value": "False"
+        }
+      },
+      "preDeploymentGates": {
+        "id": 0,
+        "gatesOptions": null,
+        "gates": []
+      },
+      "postDeploymentGates": {
+        "id": 0,
+        "gatesOptions": null,
+        "gates": []
+      },
+      "environmentTriggers": [],
+      "badgeUrl": "https://vsrm.dev.azure.com/frfontana/_apis/public/Release/badge/0f66bcc1-bb0f-4cd4-8f61-d0904056c304/1/1"
+    },
+    {
+      "id": 2,
+      "name": "Produccion",
+      "rank": 2,
+      "owner": {
+        "displayName": "FONTANA FRANCISCO",
+        "url": "https://spsprodsbr2.vssps.visualstudio.com/A874074e5-164c-438c-86c1-287659349f61/_apis/Identities/864cfca1-76a7-629d-a837-f8c754d94381",
+        "_links": {
+          "avatar": {
+            "href": "https://dev.azure.com/frfontana/_apis/GraphProfile/MemberAvatars/aad.ODY0Y2ZjYTEtNzZhNy03MjlkLWE4MzctZjhjNzU0ZDk0Mzgx"
+          }
+        },
+        "id": "864cfca1-76a7-629d-a837-f8c754d94381",
+        "uniqueName": "frfontana@uade.edu.ar",
+        "imageUrl": "https://dev.azure.com/frfontana/_apis/GraphProfile/MemberAvatars/aad.ODY0Y2ZjYTEtNzZhNy03MjlkLWE4MzctZjhjNzU0ZDk0Mzgx",
+        "descriptor": "aad.ODY0Y2ZjYTEtNzZhNy03MjlkLWE4MzctZjhjNzU0ZDk0Mzgx"
+      },
+      "variables": {},
+      "variableGroups": [],
+      "preDeployApprovals": {
+        "approvals": [
+          {
+            "rank": 1,
+            "isAutomated": false,
+            "isNotificationOn": false,
+            "approver": {
+              "displayName": "FONTANA FRANCISCO",
+              "url": "https://spsprodsbr2.vssps.visualstudio.com/A874074e5-164c-438c-86c1-287659349f61/_apis/Identities/864cfca1-76a7-629d-a837-f8c754d94381",
+              "_links": {
+                "avatar": {
+                  "href": "https://dev.azure.com/frfontana/_apis/GraphProfile/MemberAvatars/aad.ODY0Y2ZjYTEtNzZhNy03MjlkLWE4MzctZjhjNzU0ZDk0Mzgx"
+                }
+              },
+              "id": "864cfca1-76a7-629d-a837-f8c754d94381",
+              "uniqueName": "frfontana@uade.edu.ar",
+              "imageUrl": "https://dev.azure.com/frfontana/_apis/GraphProfile/MemberAvatars/aad.ODY0Y2ZjYTEtNzZhNy03MjlkLWE4MzctZjhjNzU0ZDk0Mzgx",
+              "descriptor": "aad.ODY0Y2ZjYTEtNzZhNy03MjlkLWE4MzctZjhjNzU0ZDk0Mzgx"
+            },
+            "id": 4
+          }
+        ],
+        "approvalOptions": {
+          "requiredApproverCount": 0,
+          "releaseCreatorCanBeApprover": true,
+          "autoTriggeredAndPreviousEnvironmentApprovedCanBeSkipped": false,
+          "enforceIdentityRevalidation": false,
+          "timeoutInMinutes": 43200,
+          "executionOrder": 1
+        }
+      },
+      "deployStep": {
+        "id": 5
+      },
+      "postDeployApprovals": {
+        "approvals": [
+          {
+            "rank": 1,
+            "isAutomated": true,
+            "isNotificationOn": false,
+            "id": 6
+          }
+        ],
+        "approvalOptions": {
+          "requiredApproverCount": null,
+          "releaseCreatorCanBeApprover": false,
+          "autoTriggeredAndPreviousEnvironmentApprovedCanBeSkipped": false,
+          "enforceIdentityRevalidation": false,
+          "timeoutInMinutes": 0,
+          "executionOrder": 2
+        }
+      },
+      "deployPhases": [
+        {
+          "deploymentInput": {
+            "parallelExecution": {
+              "parallelExecutionType": 0
+            },
+            "agentSpecification": null,
+            "skipArtifactsDownload": false,
+            "artifactsDownloadInput": {
+              "downloadInputs": []
+            },
+            "queueId": 1,
+            "demands": [],
+            "enableAccessToken": false,
+            "timeoutInMinutes": 0,
+            "jobCancelTimeoutInMinutes": 1,
+            "condition": "succeeded()",
+            "overrideInputs": {}
+          },
+          "rank": 1,
+          "phaseType": 1,
+          "name": "Agent job",
+          "refName": null,
+          "workflowTasks": [
+            {
+              "taskId": "d9bafed4-0b18-4f58-968d-86655b4d2ce9",
+              "version": "2.*",
+              "name": "Desplegar en producción",
+              "refName": "",
+              "enabled": true,
+              "alwaysRun": false,
+              "continueOnError": false,
+              "timeoutInMinutes": 0,
+              "retryCountOnTaskFailure": 0,
+              "definitionType": "task",
+              "overrideInputs": {},
+              "condition": "succeeded()",
+              "environment": {},
+              "inputs": {
+                "script": "\"C:\\Program Files\\Git\\bin\\bash.exe\" release/etapa.sh prod-desplegar",
+                "workingDirectory": "$(System.DefaultWorkingDirectory)\\_az-build\\entrega",
+                "failOnStderr": "false"
+              }
+            },
+            {
+              "taskId": "d9bafed4-0b18-4f58-968d-86655b4d2ce9",
+              "version": "2.*",
+              "name": "Smoke test",
+              "refName": "",
+              "enabled": true,
+              "alwaysRun": false,
+              "continueOnError": false,
+              "timeoutInMinutes": 0,
+              "retryCountOnTaskFailure": 0,
+              "definitionType": "task",
+              "overrideInputs": {},
+              "condition": "succeeded()",
+              "environment": {},
+              "inputs": {
+                "script": "\"C:\\Program Files\\Git\\bin\\bash.exe\" release/etapa.sh prod-smoke",
+                "workingDirectory": "$(System.DefaultWorkingDirectory)\\_az-build\\entrega",
+                "failOnStderr": "false"
+              }
+            },
+            {
+              "taskId": "d9bafed4-0b18-4f58-968d-86655b4d2ce9",
+              "version": "2.*",
+              "name": "Rollback",
+              "refName": "",
+              "enabled": true,
+              "alwaysRun": false,
+              "continueOnError": false,
+              "timeoutInMinutes": 0,
+              "retryCountOnTaskFailure": 0,
+              "definitionType": "task",
+              "overrideInputs": {},
+              "condition": "failed()",
+              "environment": {},
+              "inputs": {
+                "script": "\"C:\\Program Files\\Git\\bin\\bash.exe\" release/etapa.sh prod-rollback",
+                "workingDirectory": "$(System.DefaultWorkingDirectory)\\_az-build\\entrega",
+                "failOnStderr": "false"
+              }
+            },
+            {
+              "taskId": "d9bafed4-0b18-4f58-968d-86655b4d2ce9",
+              "version": "2.*",
+              "name": "Cierre: bajar QA y resumen",
+              "refName": "",
+              "enabled": true,
+              "alwaysRun": false,
+              "continueOnError": false,
+              "timeoutInMinutes": 0,
+              "retryCountOnTaskFailure": 0,
+              "definitionType": "task",
+              "overrideInputs": {},
+              "condition": "succeededOrFailed()",
+              "environment": {},
+              "inputs": {
+                "script": "\"C:\\Program Files\\Git\\bin\\bash.exe\" release/etapa.sh prod-cierre",
+                "workingDirectory": "$(System.DefaultWorkingDirectory)\\_az-build\\entrega",
+                "failOnStderr": "false"
+              }
+            }
+          ]
+        }
+      ],
+      "environmentOptions": {
+        "emailNotificationType": "OnlyOnFailure",
+        "emailRecipients": "release.environment.owner;release.creator",
+        "skipArtifactsDownload": false,
+        "timeoutInMinutes": 0,
+        "enableAccessToken": false,
+        "publishDeploymentStatus": true,
+        "badgeEnabled": false,
+        "autoLinkWorkItems": false,
+        "pullRequestDeploymentEnabled": false
+      },
+      "demands": [],
+      "conditions": [
+        {
+          "name": "QA",
+          "conditionType": 2,
+          "value": "4",
+          "result": null
+        }
+      ],
+      "executionPolicy": {
+        "concurrencyCount": 1,
+        "queueDepthCount": 0
+      },
+      "schedules": [],
+      "currentRelease": {
+        "id": 0,
+        "url": "https://vsrm.dev.azure.com/frfontana/0f66bcc1-bb0f-4cd4-8f61-d0904056c304/_apis/Release/releases/0",
+        "_links": {}
+      },
+      "retentionPolicy": {
+        "daysToKeep": 30,
+        "releasesToKeep": 3,
+        "retainBuild": true
+      },
+      "processParameters": {},
+      "properties": {
+        "BoardsEnvironmentType": {
+          "$type": "System.String",
+          "$value": "unmapped"
+        },
+        "LinkBoardsWorkItems": {
+          "$type": "System.String",
+          "$value": "False"
+        }
+      },
+      "preDeploymentGates": {
+        "id": 0,
+        "gatesOptions": null,
+        "gates": []
+      },
+      "postDeploymentGates": {
+        "id": 0,
+        "gatesOptions": null,
+        "gates": []
+      },
+      "environmentTriggers": [],
+      "badgeUrl": "https://vsrm.dev.azure.com/frfontana/_apis/public/Release/badge/0f66bcc1-bb0f-4cd4-8f61-d0904056c304/1/2"
+    }
+  ],
+  "artifacts": [
+    {
+      "sourceId": "0f66bcc1-bb0f-4cd4-8f61-d0904056c304:1",
+      "type": "Build",
+      "alias": "_az-build",
+      "definitionReference": {
+        "artifactSourceDefinitionUrl": {
+          "id": "https://dev.azure.com/frfontana/_permalink/_build/index?collectionId=c97ddb7d-391a-470d-b670-8977c6463156&projectId=0f66bcc1-bb0f-4cd4-8f61-d0904056c304&definitionId=1",
+          "name": ""
+        },
+        "defaultVersionBranch": {
+          "id": "",
+          "name": ""
+        },
+        "defaultVersionSpecific": {
+          "id": "",
+          "name": ""
+        },
+        "defaultVersionTags": {
+          "id": "",
+          "name": ""
+        },
+        "defaultVersionType": {
+          "id": "latestType",
+          "name": "Latest"
+        },
+        "definition": {
+          "id": "1",
+          "name": "az-build"
+        },
+        "definitions": {
+          "id": "",
+          "name": ""
+        },
+        "IsMultiDefinitionType": {
+          "id": "False",
+          "name": "False"
+        },
+        "project": {
+          "id": "0f66bcc1-bb0f-4cd4-8f61-d0904056c304",
+          "name": "test-sre-ia"
+        },
+        "repository": {
+          "id": "",
+          "name": ""
+        }
+      },
+      "isPrimary": true,
+      "isRetained": false
+    }
+  ],
+  "triggers": [
+    {
+      "artifactAlias": "_az-build",
+      "triggerConditions": [
+        {
+          "sourceBranch": "azure-devops",
+          "tags": [],
+          "tagFilter": null,
+          "useBuildDefinitionBranch": false,
+          "createReleaseOnBuildTagging": false
+        }
+      ],
+      "triggerType": 1
+    }
+  ],
+  "releaseNameFormat": "Release-$(rev:r)",
+  "tags": [],
+  "properties": {
+    "DefinitionCreationSource": {
+      "$type": "System.String",
+      "$value": "ReleaseNew"
+    },
+    "IntegrateBoardsWorkItems": {
+      "$type": "System.String",
+      "$value": "False"
+    },
+    "IntegrateJiraWorkItems": {
+      "$type": "System.String",
+      "$value": "false"
+    }
+  },
+  "id": 1,
+  "name": "az-release",
+  "path": "\\",
+  "projectReference": null,
+  "url": "https://vsrm.dev.azure.com/frfontana/0f66bcc1-bb0f-4cd4-8f61-d0904056c304/_apis/Release/definitions/1",
+  "_links": {
+    "self": {
+      "href": "https://vsrm.dev.azure.com/frfontana/0f66bcc1-bb0f-4cd4-8f61-d0904056c304/_apis/Release/definitions/1"
+    },
+    "web": {
+      "href": "https://dev.azure.com/frfontana/0f66bcc1-bb0f-4cd4-8f61-d0904056c304/_release?definitionId=1"
+    }
+  }
+}
