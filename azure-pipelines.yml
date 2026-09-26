@@ -1,0 +1,104 @@
+# Build (CI) de la versión Azure DevOps: pipeline "az-build".
+#
+# Baja la app desde main, corre los tests, construye la imagen az-todo-app y
+# publica los tres artifacts que consume el release clásico "az-release" (el CD).
+#
+# Toda la lógica vive en ci/build.sh; este archivo sólo dice qué paso correr.
+# Esta rama es huérfana: no comparte historia con main ni tiene .github/, así
+# que no puede afectar a la versión de GitHub Actions.
+
+name: $(Date:yyyyMMdd)$(Rev:.r)
+
+trigger: none # manual: se dispara con "Run pipeline"
+pr: none      # imprescindible: sin esto, Azure valida los PRs de TODAS las ramas
+
+resources:
+  repositories:
+    - repository: producto
+      type: github
+      endpoint: github-producto # conexión de servicio, se crea a mano (ver README)
+      name: FranciscoFontana/test-sre-ai-deploy
+      ref: main
+
+pool:
+  name: Default
+
+variables:
+  # No se usa el task Bash@3: en pipelines YAML de Windows corre el bash de WSL,
+  # y esta máquina no tiene distribución de usuario. Se llama a Git Bash directo.
+  gitBash: 'C:\Program Files\Git\bin\bash.exe'
+  entrega: $(Agent.BuildDirectory)\entrega
+
+jobs:
+  - job: build
+    displayName: Build y tests determinísticos
+    timeoutInMinutes: 45
+    steps:
+      - checkout: self
+        displayName: Checkout de la rama azure-devops (entrega)
+        path: entrega
+        clean: true
+        fetchDepth: 1
+
+      - checkout: producto
+        displayName: Checkout de main (producto)
+        path: producto
+        clean: true
+        fetchDepth: 1
+
+      - script: '"$(gitBash)" ci/build.sh verificar'
+        displayName: Verificar herramientas
+        workingDirectory: $(entrega)
+
+      - script: '"$(gitBash)" ci/build.sh dependencias'
+        displayName: Instalar dependencias y Chromium
+        workingDirectory: $(entrega)
+
+      - script: '"$(gitBash)" ci/build.sh typecheck'
+        displayName: Typecheck
+        workingDirectory: $(entrega)
+
+      - script: '"$(gitBash)" ci/build.sh tests'
+        displayName: Tests unitarios, de integración y de interfaz
+        workingDirectory: $(entrega)
+
+      # Corre aunque fallen los tests: es justo cuando más importa verlos.
+      - task: PublishTestResults@2
+        displayName: Publicar resultados en la pestaña Tests
+        condition: succeededOrFailed()
+        inputs:
+          testResultsFormat: JUnit
+          searchFolder: $(Agent.BuildDirectory)\test-results
+          testResultsFiles: '*.xml'
+          testRunTitle: Tests de la app · $(Build.BuildNumber)
+          failTaskOnFailedTests: false # el paso de tests ya falla solo
+
+      - script: '"$(gitBash)" ci/build.sh imagen'
+        displayName: Build de la imagen az-todo-app
+        workingDirectory: $(entrega)
+
+      - script: '"$(gitBash)" ci/build.sh prune'
+        displayName: Conservar sólo las últimas 5 imágenes
+        workingDirectory: $(entrega)
+
+      - script: '"$(gitBash)" ci/build.sh empaquetar'
+        displayName: Preparar los artifacts del release
+        workingDirectory: $(entrega)
+
+      - task: PublishPipelineArtifact@1
+        displayName: 'Artifact: entrega (scripts de despliegue)'
+        inputs:
+          targetPath: $(Build.ArtifactStagingDirectory)\entrega
+          artifact: entrega
+
+      - task: PublishPipelineArtifact@1
+        displayName: 'Artifact: producto-qa (agente y contrato)'
+        inputs:
+          targetPath: $(Build.ArtifactStagingDirectory)\producto-qa
+          artifact: producto-qa
+
+      - task: PublishPipelineArtifact@1
+        displayName: 'Artifact: manifest (qué versión de main se construyó)'
+        inputs:
+          targetPath: $(Build.ArtifactStagingDirectory)\manifest
+          artifact: manifest
